@@ -69,7 +69,7 @@ export default function RootLayout({
         <footer className="border-t border-ebano/10 mt-auto hidden md:block">
           <div className="max-w-7xl mx-auto px-6 py-6">
             <p className="text-center text-text-muted text-sm font-body">
-            ViveBien © 2026 — Con amor para nuestra comunidad 💚
+            ViveBien © 2026 — Con amor para nuestra comunidad 💚 con amor 
             </p>
           </div>
         </footer>
