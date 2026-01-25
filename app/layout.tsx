@@ -4,7 +4,7 @@ import Link from 'next/link';
 import MobileNav from './MobileNav';
 
 export const metadata: Metadata = {
-  title: 'ViveBien - Staging Dashboard',
+  title: 'ViveBien - Dashboard',
   description: 'Healthcare companion dashboard for the Hispanic community',
   icons: {
     icon: '/favicon.png',
@@ -33,8 +33,8 @@ export default function RootLayout({
               <Link href="/" className="flex items-center gap-2 group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
-                  src="/logo.png" 
-                  alt="ViveBien - Testing Stage" 
+                  src="/logo.jpg" 
+                  alt="ViveBien - Tu salud, buenas manos" 
                   className="h-10 md:h-12 w-auto"
                 />
               </Link>
@@ -69,7 +69,7 @@ export default function RootLayout({
         <footer className="border-t border-ebano/10 mt-auto hidden md:block">
           <div className="max-w-7xl mx-auto px-6 py-6">
             <p className="text-center text-text-muted text-sm font-body">
-            ViveBien © 2026 — Con amor para nuestra comunidad, con mucho amor 💚 
+              ViveBien © 2026 — Con amor para nuestra comunidad 💚
             </p>
           </div>
         </footer>
