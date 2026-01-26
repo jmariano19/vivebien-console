@@ -4,10 +4,10 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function StatCard({ title, value, icon, color, subtitle }: { 
-  title: string; 
-  value: string | number; 
-  icon: React.ReactNode; 
+function StatCard({ title, value, icon, color, subtitle }: {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
   color: string;
   subtitle?: string;
 }) {
@@ -36,13 +36,13 @@ function StatusBadge({ status, needsHuman }: { status: string; needsHuman?: bool
       </span>
     );
   }
-  
+
   const statusStyles: Record<string, string> = {
     active: 'bg-success/10 text-success',
     paused: 'bg-warning/10 text-warning',
     blocked: 'bg-error/10 text-error',
   };
-  
+
   return (
     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyles[status] || 'bg-gray-100 text-gray-600'}`}>
       {status}
@@ -58,7 +58,7 @@ function formatTimeAgo(dateString: string | null): string {
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-  
+
   if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
@@ -123,7 +123,7 @@ export default async function HomePage() {
           <h2 className="font-display font-bold text-xl md:text-2xl text-ebano">Patients</h2>
           <span className="text-text-muted text-sm">{users.length} total</span>
         </div>
-        
+
         {/* Desktop Table */}
         <div className="hidden lg:block card overflow-hidden">
           <table className="w-full">
@@ -132,6 +132,7 @@ export default async function HomePage() {
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Patient</th>
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Status</th>
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Credits</th>
+                <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Messages</th>
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Topic</th>
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Routines</th>
                 <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Last Active</th>
@@ -141,7 +142,7 @@ export default async function HomePage() {
             <tbody className="divide-y divide-ebano/5">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-text-muted">
+                  <td colSpan={8} className="py-12 text-center text-text-muted">
                     <p>No patients yet</p>
                   </td>
                 </tr>
@@ -170,6 +171,9 @@ export default async function HomePage() {
                       <span className="font-body font-semibold text-ebano">{user.credits_balance ?? 0}</span>
                     </td>
                     <td className="py-4 px-4">
+                      <span className="font-body font-semibold text-ebano">{user.message_count ?? 0}</span>
+                    </td>
+                    <td className="py-4 px-4">
                       {user.current_topic ? (
                         <span className="px-2 py-1 rounded-lg text-xs font-medium bg-info/10 text-info capitalize">
                           {user.current_topic}
@@ -187,7 +191,7 @@ export default async function HomePage() {
                       {formatTimeAgo(user.last_message_at || null)}
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <Link 
+                      <Link
                         href={`/patient/${user.id}`}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-barro hover:bg-barro/10 transition-colors"
                       >
@@ -212,8 +216,8 @@ export default async function HomePage() {
             </div>
           ) : (
             users.map((user) => (
-              <Link 
-                key={user.id} 
+              <Link
+                key={user.id}
                 href={`/patient/${user.id}`}
                 className="patient-card block"
               >
@@ -223,7 +227,6 @@ export default async function HomePage() {
                       {(user.preferred_name || user.name || user.phone)?.[0]?.toUpperCase() || '?'}
                     </span>
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -234,7 +237,6 @@ export default async function HomePage() {
                       </div>
                       <StatusBadge status={user.status} needsHuman={user.needs_human || false} />
                     </div>
-
                     <div className="flex items-center flex-wrap gap-2 mt-3 text-xs">
                       <div className="flex items-center gap-1">
                         <svg className="w-4 h-4 text-sancocho" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,25 +244,27 @@ export default async function HomePage() {
                         </svg>
                         <span className="font-medium text-ebano">{user.credits_balance ?? 0}</span>
                       </div>
-                      
+                      <div className="flex items-center gap-1">
+                        <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span className="font-medium text-ebano">{user.message_count ?? 0}</span>
+                      </div>
                       {user.current_topic && (
                         <span className="px-2 py-0.5 rounded bg-info/10 text-info capitalize">
                           {user.current_topic}
                         </span>
                       )}
-                      
                       {Number(user.routine_count) > 0 && (
                         <span className="px-2 py-0.5 rounded bg-success/10 text-success">
                           {user.routine_count} routine
                         </span>
                       )}
-                      
                       <span className="text-text-muted ml-auto">
                         {formatTimeAgo(user.last_message_at || null)}
                       </span>
                     </div>
                   </div>
-
                   <svg className="w-5 h-5 text-text-muted flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
