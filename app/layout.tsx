@@ -43,11 +43,20 @@ export default function RootLayout({
                 <Link href="/" className="font-body text-text-secondary hover:text-barro transition-colors">
                   Patients
                 </Link>
+                <Link href="/followups" className="font-body text-text-secondary hover:text-barro transition-colors">
+                  Follow-ups
+                </Link>
                 <Link href="/routines" className="font-body text-text-secondary hover:text-barro transition-colors">
                   Routines
                 </Link>
                 <Link href="/credits" className="font-body text-text-secondary hover:text-barro transition-colors">
                   Credits
+                </Link>
+                <Link href="/analytics" className="font-body text-text-secondary hover:text-barro transition-colors">
+                  Analytics
+                </Link>
+                <Link href="/system-health" className="font-body text-text-secondary hover:text-barro transition-colors">
+                  System
                 </Link>
                 <div className="sello-confianza">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
