@@ -237,22 +237,32 @@ export default async function SystemHealthPage() {
       {/* AI Usage Stats */}
       <div className="card">
         <h3 className="font-display font-bold text-lg text-ebano mb-4">AI Usage</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-3 bg-chamomile/30 rounded-lg">
-            <p className="text-2xl font-bold text-barro">${aiStats.totalCostUsd.toFixed(2)}</p>
-            <p className="text-xs text-text-muted">Total Cost</p>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-2">All Time</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center p-3 bg-chamomile/30 rounded-lg">
+                <p className="text-2xl font-bold text-barro">${aiStats.totalCostUsd.toFixed(2)}</p>
+                <p className="text-xs text-text-muted">Cost</p>
+              </div>
+              <div className="text-center p-3 bg-chamomile/30 rounded-lg">
+                <p className="text-2xl font-bold text-info">{formatNumber(aiStats.totalInputTokens + aiStats.totalOutputTokens)}</p>
+                <p className="text-xs text-text-muted">Tokens</p>
+              </div>
+            </div>
           </div>
-          <div className="text-center p-3 bg-chamomile/30 rounded-lg">
-            <p className="text-2xl font-bold text-info">{formatNumber(aiStats.totalInputTokens + aiStats.totalOutputTokens)}</p>
-            <p className="text-xs text-text-muted">Total Tokens</p>
-          </div>
-          <div className="text-center p-3 bg-chamomile/30 rounded-lg">
-            <p className="text-2xl font-bold text-success">${aiStats.cost24h.toFixed(2)}</p>
-            <p className="text-xs text-text-muted">Cost (24h)</p>
-          </div>
-          <div className="text-center p-3 bg-chamomile/30 rounded-lg">
-            <p className="text-2xl font-bold text-sancocho">{formatNumber(aiStats.inputTokens24h + aiStats.outputTokens24h)}</p>
-            <p className="text-xs text-text-muted">Tokens (24h)</p>
+          <div>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-2">Last 24 Hours</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center p-3 bg-chamomile/30 rounded-lg">
+                <p className="text-2xl font-bold text-success">${aiStats.cost24h.toFixed(2)}</p>
+                <p className="text-xs text-text-muted">Cost</p>
+              </div>
+              <div className="text-center p-3 bg-chamomile/30 rounded-lg">
+                <p className="text-2xl font-bold text-sancocho">{formatNumber(aiStats.inputTokens24h + aiStats.outputTokens24h)}</p>
+                <p className="text-xs text-text-muted">Tokens</p>
+              </div>
+            </div>
           </div>
         </div>
 
