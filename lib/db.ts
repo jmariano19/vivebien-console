@@ -727,7 +727,7 @@ export async function fetchMessageVolumeByDay(days = 14): Promise<DailyMessageCo
       GROUP BY DATE(created_at)
     )
     SELECT
-      TO_CHAR(ds.date, 'Mon DD') as date,
+      TO_CHAR(ds.date, 'MM/DD') as date,
       COALESCE(dc.user_messages, 0) as user_messages,
       COALESCE(dc.assistant_messages, 0) as assistant_messages,
       COALESCE(dc.total, 0) as total
@@ -823,7 +823,7 @@ export async function fetchUserGrowth(days = 30): Promise<UserGrowth[]> {
       LEFT JOIN daily_new dn ON ds.date = dn.date
     )
     SELECT
-      TO_CHAR(date, 'Mon DD') as date,
+      TO_CHAR(date, 'MM/DD') as date,
       new_users::int,
       cumulative::int
     FROM cumulative
@@ -858,7 +858,7 @@ export async function fetchCreditsUsage(days = 14): Promise<CreditsUsage[]> {
       GROUP BY DATE(created_at)
     )
     SELECT
-      TO_CHAR(ds.date, 'Mon DD') as date,
+      TO_CHAR(ds.date, 'MM/DD') as date,
       COALESCE(dc.credits_used, 0)::int as credits_used,
       COALESCE(dc.credits_added, 0)::int as credits_added
     FROM date_series ds
@@ -896,7 +896,7 @@ export async function fetchResponseTimeTrends(days = 7): Promise<ResponseTimeTre
       GROUP BY DATE(created_at)
     )
     SELECT
-      TO_CHAR(ds.date, 'Mon DD') as date,
+      TO_CHAR(ds.date, 'MM/DD') as date,
       COALESCE(ROUND(dl.avg_latency_ms), 0)::int as avg_latency_ms,
       COALESCE(dl.max_latency_ms, 0)::int as max_latency_ms,
       COALESCE(dl.request_count, 0)::int as request_count
@@ -941,4 +941,78 @@ export async function fetchEngagementMetrics(): Promise<EngagementMetrics> {
     returnRate: Math.round(parseFloat(rows[0].return_rate) || 0),
     activeUserRate: Math.round(parseFloat(rows[0].active_user_rate) || 0),
   };
+}
+
+// Today's active users with interaction details
+export interface TodaysActiveUser {
+  id: string;
+  preferred_name?: string;
+  name?: string;
+  phone: string;
+  preferred_language: string;
+  message_count_today: number;
+  first_message_today: string;
+  last_message_today: string;
+  emotional_state?: string;
+  current_topic?: string;
+}
+
+export async function fetchTodaysActiveUsers(): Promise<TodaysActiveUser[]> {
+  if (USE_MOCK_DATA) return [];
+  return safeQuery(`
+    SELECT
+      u.id,
+      u.preferred_name,
+      u.name,
+      u.phone,
+      u.preferred_language,
+      COUNT(m.id)::int as message_count_today,
+      MIN(m.created_at) as first_message_today,
+      MAX(m.created_at) as last_message_today,
+      cs.emotional_state,
+      cs.current_topic
+    FROM ${s}users u
+    INNER JOIN ${s}messages m ON m.user_id = u.id
+      AND m.created_at >= CURRENT_DATE
+      AND m.role = 'user'
+    LEFT JOIN ${s}conversation_state cs ON cs.user_id = u.id
+    WHERE u.deleted_at IS NULL
+    GROUP BY u.id, u.preferred_name, u.name, u.phone, u.preferred_language,
+             cs.emotional_state, cs.current_topic
+    ORDER BY MAX(m.created_at) DESC
+  `);
+}
+
+// Active users per day for the last N days
+export interface DailyActiveUserCount {
+  date: string;
+  active_users: number;
+}
+
+export async function fetchDailyActiveUsers(days = 14): Promise<DailyActiveUserCount[]> {
+  if (USE_MOCK_DATA) return [];
+  return safeQuery(`
+    WITH date_series AS (
+      SELECT generate_series(
+        CURRENT_DATE - INTERVAL '${days - 1} days',
+        CURRENT_DATE,
+        '1 day'::interval
+      )::date as date
+    ),
+    daily_active AS (
+      SELECT
+        DATE(created_at) as date,
+        COUNT(DISTINCT user_id) as active_users
+      FROM ${s}messages
+      WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        AND role = 'user'
+      GROUP BY DATE(created_at)
+    )
+    SELECT
+      TO_CHAR(ds.date, 'MM/DD') as date,
+      COALESCE(da.active_users, 0)::int as active_users
+    FROM date_series ds
+    LEFT JOIN daily_active da ON ds.date = da.date
+    ORDER BY ds.date ASC
+  `);
 }

@@ -1,9 +1,7 @@
-import { 
-  fetchUserById, 
-  fetchUserRoutines, 
-  fetchUserMessages, 
+import {
+  fetchUserById,
+  fetchUserMessages,
   fetchUserNotes,
-  fetchCreditHistory,
 } from '@/lib/db';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -39,29 +37,6 @@ function EmotionalStateIndicator({ state }: { state?: string }) {
   );
 }
 
-function CreditsDisplay({ balance, showWarning = true }: { balance: number; showWarning?: boolean }) {
-  const isLow = balance < 10;
-  const isCritical = balance < 5;
-  
-  if (!showWarning) {
-    return <span className="font-display font-bold text-2xl text-barro">{balance}</span>;
-  }
-  
-  return (
-    <div className="text-center">
-      <p className={`font-display font-bold text-2xl ${
-        isCritical ? 'text-error' : isLow ? 'text-warning' : 'text-barro'
-      }`}>
-        {balance}
-        {isCritical && <span className="ml-1 text-sm">🔴</span>}
-        {isLow && !isCritical && <span className="ml-1 text-sm">⚠️</span>}
-      </p>
-      <p className="text-xs text-text-muted">Credits</p>
-      {isCritical && <p className="text-xs text-error mt-1">Critical</p>}
-      {isLow && !isCritical && <p className="text-xs text-warning mt-1">Low</p>}
-    </div>
-  );
-}
 
 function TopicBadge({ topic }: { topic?: string }) {
   if (!topic) return null;
@@ -101,12 +76,10 @@ function formatTimeAgo(dateString: string | null): string {
 }
 
 export default async function PatientDetailPage({ params }: PageProps) {
-  const [user, routines, messages, notes, creditHistory] = await Promise.all([
+  const [user, messages, notes] = await Promise.all([
     fetchUserById(params.id),
-    fetchUserRoutines(params.id),
     fetchUserMessages(params.id, 100),
     fetchUserNotes(params.id),
-    fetchCreditHistory(params.id),
   ]);
 
   if (!user) {
@@ -164,19 +137,14 @@ export default async function PatientDetailPage({ params }: PageProps) {
           )}
 
           {/* Quick Stats Row */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className={`text-center rounded-xl py-3 ${
-              (user.credits_balance ?? 0) < 10 ? 'bg-warning/10' : 'bg-chamomile/50'
-            }`}>
-              <CreditsDisplay balance={user.credits_balance ?? 0} />
-            </div>
-            <div className="text-center bg-chamomile/50 rounded-xl py-3">
-              <p className="font-display font-bold text-xl text-info">{routines.length}</p>
-              <p className="text-xs text-text-muted">Routines</p>
-            </div>
+          <div className="grid grid-cols-2 gap-2">
             <div className="text-center bg-chamomile/50 rounded-xl py-3">
               <p className="font-display font-bold text-xl text-ebano">{messages.length}</p>
               <p className="text-xs text-text-muted">Messages</p>
+            </div>
+            <div className="text-center bg-chamomile/50 rounded-xl py-3">
+              <p className="font-display font-bold text-xl text-ebano">{notes.length}</p>
+              <p className="text-xs text-text-muted">Notes</p>
             </div>
           </div>
         </div>
@@ -220,18 +188,13 @@ export default async function PatientDetailPage({ params }: PageProps) {
             </div>
 
             <div className="flex items-center gap-6">
-              <div className={`text-center px-4 py-2 rounded-xl ${
-                (user.credits_balance ?? 0) < 10 ? 'bg-warning/10' : ''
-              }`}>
-                <CreditsDisplay balance={user.credits_balance ?? 0} />
-              </div>
-              <div className="text-center">
-                <p className="font-display font-bold text-2xl text-info">{routines.length}</p>
-                <p className="text-xs text-text-muted">Routines</p>
-              </div>
               <div className="text-center">
                 <p className="font-display font-bold text-2xl text-ebano">{messages.length}</p>
                 <p className="text-xs text-text-muted">Messages</p>
+              </div>
+              <div className="text-center">
+                <p className="font-display font-bold text-2xl text-ebano">{notes.length}</p>
+                <p className="text-xs text-text-muted">Notes</p>
               </div>
             </div>
           </div>
@@ -269,12 +232,10 @@ export default async function PatientDetailPage({ params }: PageProps) {
       </header>
 
       {/* Tabs Content */}
-      <PatientTabs 
+      <PatientTabs
         user={user}
-        routines={routines}
         messages={messages}
         notes={notes}
-        creditHistory={creditHistory}
       />
     </div>
   );
