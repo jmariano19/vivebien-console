@@ -372,29 +372,103 @@ function RoutinesTab({ routines, userId }: { routines: HealthRoutine[]; userId: 
 function MessagesTab({ messages }: { messages: Message[] }) {
   const sortedMessages = [...messages].reverse();
 
+  // Group messages by date
+  const groupedMessages = sortedMessages.reduce((groups: { [key: string]: Message[] }, msg) => {
+    const date = new Date(msg.created_at).toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(msg);
+    return groups;
+  }, {});
+
+  // Check mark component for read receipts
+  const ReadReceipt = () => (
+    <svg className="w-4 h-4 inline-block ml-1 text-blue-400" viewBox="0 0 16 11" fill="none">
+      <path d="M11.071 0.929L4.5 7.5L1.929 4.929" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14.571 0.929L8 7.5M8 7.5L6.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
   return (
-    <div className="card">
-      <h3 className="font-display font-semibold text-lg text-ebano mb-4">Conversation History</h3>
-      
-      {messages.length === 0 ? (
-        <p className="text-text-muted text-center py-8">No messages yet</p>
-      ) : (
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-          {sortedMessages.map((msg) => (
-            <div 
-              key={msg.id} 
-              className={msg.role === 'user' ? 'bubble-user' : 'bubble-assistant'}
-            >
-              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-              <p className={`text-xs mt-1 ${msg.role === 'user' ? 'text-white/70' : 'text-text-muted'}`}>
-                {new Date(msg.created_at).toLocaleTimeString('es-ES', { 
-                  hour: '2-digit', minute: '2-digit'
-                })}
-              </p>
-            </div>
-          ))}
+    <div className="whatsapp-chat-container">
+      {/* Chat Header */}
+      <div className="whatsapp-header">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-white text-sm">Conversation</p>
+            <p className="text-xs text-white/70">{messages.length} messages</p>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Chat Messages Area */}
+      <div className="whatsapp-messages-area">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center bg-white/90 rounded-lg px-6 py-4 shadow-sm">
+              <p className="text-gray-500 text-sm">No messages yet</p>
+              <p className="text-xs text-gray-400 mt-1">Messages will appear here</p>
+            </div>
+          </div>
+        ) : (
+          <div className="whatsapp-messages-scroll">
+            {Object.entries(groupedMessages).map(([date, msgs]) => (
+              <div key={date}>
+                {/* Date Separator */}
+                <div className="flex justify-center my-4">
+                  <span className="whatsapp-date-badge">{date}</span>
+                </div>
+
+                {/* Messages for this date */}
+                {msgs.map((msg, index) => (
+                  <div
+                    key={msg.id}
+                    className={`whatsapp-message-row ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <div className={msg.role === 'user' ? 'whatsapp-bubble-user' : 'whatsapp-bubble-assistant'}>
+                      {/* Message tail */}
+                      <div className={msg.role === 'user' ? 'whatsapp-tail-user' : 'whatsapp-tail-assistant'} />
+
+                      {/* Message content */}
+                      <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{msg.content}</p>
+
+                      {/* Timestamp and read receipt */}
+                      <div className={`flex items-center justify-end gap-1 mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
+                        <span className="text-[11px]">
+                          {new Date(msg.created_at).toLocaleTimeString('es-ES', {
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                        {msg.role === 'user' && <ReadReceipt />}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Chat Input Area (read-only indicator) */}
+      <div className="whatsapp-input-area">
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <span>Read-only conversation view</span>
+        </div>
+      </div>
     </div>
   );
 }

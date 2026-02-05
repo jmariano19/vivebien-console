@@ -32,9 +32,9 @@ export default function RootLayout({
             <div className="flex items-center justify-between">
               <Link href="/" className="flex items-center gap-2 group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src="/logo.jpg" 
-                  alt="ViveBien - Tu salud, buenas manos" 
+                <img
+                  src="/logo.jpg"
+                  alt="ViveBien - Tu salud, en buenas manos"
                   className="h-10 md:h-12 w-auto"
                 />
               </Link>

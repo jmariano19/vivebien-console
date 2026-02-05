@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">
+  <!-- Left hand -->
+  <path d="M45 15 C20 25, 10 45, 25 60 C30 65, 40 68, 55 65"
+        fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Right hand -->
+  <path d="M75 15 C100 25, 110 45, 95 60 C90 65, 80 68, 65 65"
+        fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Heart -->
+  <path d="M60 30 C60 25, 55 20, 50 20 C42 20, 40 28, 40 32 C40 45, 60 55, 60 55 C60 55, 80 45, 80 32 C80 28, 78 20, 70 20 C65 20, 60 25, 60 30 Z"
+        fill="#e53935"/>
+  <!-- ViveBien text -->
+  <text x="120" y="42" font-family="Georgia, serif" font-size="32" font-weight="bold" fill="#1a1a1a">ViveBien</text>
+  <!-- Tagline -->
+  <text x="120" y="62" font-family="Arial, sans-serif" font-size="14" font-style="italic" fill="#1a1a1a">Tu salud, en buenas manos</text>
+</svg>

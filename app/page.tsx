@@ -454,17 +454,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* System Health */}
-      <section>
-        <SystemHealthCard health={systemHealth} />
-      </section>
-
-      {/* Two Column Layout: Engagement + Follow-ups */}
-      <section className="grid md:grid-cols-2 gap-4 md:gap-6">
-        <EngagementOpportunitiesCard opportunities={opportunities} />
-        <FollowupsCard followups={followups} />
-      </section>
-
       {/* Patient List + Activity Feed */}
       <section className="grid lg:grid-cols-3 gap-4 md:gap-6">
         {/* Patient List - Takes 2 columns */}
@@ -647,6 +636,17 @@ export default async function HomePage() {
         <div>
           <RecentActivityCard activity={recentActivity} />
         </div>
+      </section>
+
+      {/* Two Column Layout: Engagement + Follow-ups */}
+      <section className="grid md:grid-cols-2 gap-4 md:gap-6">
+        <EngagementOpportunitiesCard opportunities={opportunities} />
+        <FollowupsCard followups={followups} />
+      </section>
+
+      {/* System Health */}
+      <section>
+        <SystemHealthCard health={systemHealth} />
       </section>
     </div>
   );
