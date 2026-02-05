@@ -489,7 +489,9 @@ export async function fetchAiUsageStats(): Promise<AiUsageStats> {
     };
   }
 
-  const [totals, recent, models] = await Promise.all([
+  // Query ai_usage (Claude chat) + production.media (Whisper transcription & Vision)
+  const [totals, recent, models, mediaTotals, mediaRecent, mediaModels] = await Promise.all([
+    // --- ai_usage totals (all time) ---
     safeQuery(`
       SELECT
         COALESCE(SUM(cost_usd), 0) as total_cost,
@@ -497,6 +499,7 @@ export async function fetchAiUsageStats(): Promise<AiUsageStats> {
         COALESCE(SUM(output_tokens), 0) as total_output
       FROM ${s}ai_usage
     `),
+    // --- ai_usage recent (24h) ---
     safeQuery(`
       SELECT
         COALESCE(SUM(cost_usd), 0) as cost_24h,
@@ -506,27 +509,74 @@ export async function fetchAiUsageStats(): Promise<AiUsageStats> {
       FROM ${s}ai_usage
       WHERE created_at > NOW() - INTERVAL '24 hours'
     `),
+    // --- ai_usage model breakdown ---
     safeQuery(`
       SELECT model, COUNT(*) as calls, COALESCE(SUM(cost_usd), 0) as cost
       FROM ${s}ai_usage
       GROUP BY model
       ORDER BY calls DESC
     `),
+    // --- production.media totals (all time) ---
+    safeQuery(`
+      SELECT
+        COALESCE(SUM(ai_cost_usd), 0) as total_cost,
+        COALESCE(SUM(ai_tokens_used), 0) as total_tokens
+      FROM production.media
+      WHERE ai_model IS NOT NULL
+    `),
+    // --- production.media recent (24h) ---
+    safeQuery(`
+      SELECT
+        COALESCE(SUM(ai_cost_usd), 0) as cost_24h,
+        COALESCE(SUM(ai_tokens_used), 0) as tokens_24h
+      FROM production.media
+      WHERE ai_model IS NOT NULL
+        AND created_at > NOW() - INTERVAL '24 hours'
+    `),
+    // --- production.media model breakdown ---
+    safeQuery(`
+      SELECT
+        ai_model as model,
+        media_type,
+        COUNT(*) as calls,
+        COALESCE(SUM(ai_cost_usd), 0) as cost
+      FROM production.media
+      WHERE ai_model IS NOT NULL
+      GROUP BY ai_model, media_type
+      ORDER BY calls DESC
+    `),
   ]);
 
+  // Combine ai_usage + media model breakdowns
+  const aiModels = models.map(m => ({
+    model: m.model || 'unknown',
+    calls: parseInt(m.calls) || 0,
+    cost: parseFloat(m.cost) || 0,
+  }));
+
+  const mediaModelEntries = mediaModels.map(m => ({
+    model: `${m.model || 'unknown'} (${m.media_type || 'media'})`,
+    calls: parseInt(m.calls) || 0,
+    cost: parseFloat(m.cost) || 0,
+  }));
+
+  const allModels = [...aiModels, ...mediaModelEntries].sort((a, b) => b.calls - a.calls);
+
+  // Sum up totals from both sources
+  const mediaTotalCost = parseFloat(mediaTotals[0]?.total_cost) || 0;
+  const mediaTotalTokens = parseInt(mediaTotals[0]?.total_tokens) || 0;
+  const mediaRecentCost = parseFloat(mediaRecent[0]?.cost_24h) || 0;
+  const mediaRecentTokens = parseInt(mediaRecent[0]?.tokens_24h) || 0;
+
   return {
-    totalCostUsd: parseFloat(totals[0]?.total_cost) || 0,
-    totalInputTokens: parseInt(totals[0]?.total_input) || 0,
+    totalCostUsd: (parseFloat(totals[0]?.total_cost) || 0) + mediaTotalCost,
+    totalInputTokens: (parseInt(totals[0]?.total_input) || 0) + mediaTotalTokens,
     totalOutputTokens: parseInt(totals[0]?.total_output) || 0,
-    cost24h: parseFloat(recent[0]?.cost_24h) || 0,
-    inputTokens24h: parseInt(recent[0]?.input_24h) || 0,
+    cost24h: (parseFloat(recent[0]?.cost_24h) || 0) + mediaRecentCost,
+    inputTokens24h: (parseInt(recent[0]?.input_24h) || 0) + mediaRecentTokens,
     outputTokens24h: parseInt(recent[0]?.output_24h) || 0,
     avgLatency24h: Math.round(parseFloat(recent[0]?.avg_latency_24h) || 0),
-    modelBreakdown: models.map(m => ({
-      model: m.model || 'unknown',
-      calls: parseInt(m.calls) || 0,
-      cost: parseFloat(m.cost) || 0,
-    })),
+    modelBreakdown: allModels,
   };
 }
 
