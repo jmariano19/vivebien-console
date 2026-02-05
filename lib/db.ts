@@ -76,60 +76,6 @@ export interface NotificationPreferences {
   quiet_hours_end?: string;
 }
 
-export interface BillingAccount {
-  id: string;
-  user_id: string;
-  subscription_status: string;
-  subscription_plan?: string;
-  credits_balance: number;
-  credits_monthly_allowance: number;
-  credits_used_this_period: number;
-  credits_reset_at?: string;
-  created_at: string;
-}
-
-export interface CreditLedgerEntry {
-  id: string;
-  billing_account_id: string;
-  user_id: string;
-  change_amount: number;
-  change_type: string;
-  balance_after: number;
-  description?: string;
-  external_ref?: string;
-  metadata?: Record<string, any>;
-  created_at: string;
-}
-
-export interface HealthRoutine {
-  id: string;
-  user_id: string;
-  type: string;
-  status: string;
-  schedule: RoutineSchedule;
-  configuration: RoutineConfiguration;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface RoutineSchedule {
-  timezone?: string;
-  evening_message?: string;
-  morning_message?: string;
-  pre_bed_message?: string;
-}
-
-export interface RoutineConfiguration {
-  goal?: string;
-  bedtime?: string;
-  wake_time?: string;
-  language?: string;
-  risk_flags?: string[];
-  evidence_basis?: string;
-  takes_sleep_meds?: boolean;
-  medications_confirmed?: boolean;
-}
-
 export interface ConversationState {
   id: string;
   user_id: string;
@@ -243,19 +189,6 @@ const MOCK_MESSAGES: Message[] = [
   { id: 'msg-4', user_id: 'mock-user-1', role: 'assistant', content: 'Entiendo, cuéntame más sobre eso. ¿Hace cuánto tiempo tienes estos problemas?', channel: 'whatsapp', created_at: new Date(Date.now() - 45000).toISOString() },
 ];
 
-const MOCK_ROUTINES: HealthRoutine[] = [
-  {
-    id: 'routine-1',
-    user_id: 'mock-user-1',
-    type: 'sleep_improvement',
-    status: 'active',
-    schedule: { timezone: 'America/New_York', evening_message: '9pm', morning_message: '7am' },
-    configuration: { goal: 'Better sleep quality', bedtime: '22:00', wake_time: '06:00' },
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
 // API Functions with schema support
 export async function fetchUsers(): Promise<UserWithDetails[]> {
   if (USE_MOCK_DATA) return MOCK_USERS;
@@ -292,13 +225,6 @@ export async function fetchUserById(id: string): Promise<UserWithDetails | null>
   return rows[0] || null;
 }
 
-export async function fetchUserRoutines(userId: string): Promise<HealthRoutine[]> {
-  if (USE_MOCK_DATA) return MOCK_ROUTINES.filter(r => r.user_id === userId);
-  return safeQuery(`
-    SELECT * FROM ${s}health_routines WHERE user_id = $1 ORDER BY created_at DESC
-  `, [userId]);
-}
-
 export async function fetchUserMessages(userId: string, limit = 50): Promise<Message[]> {
   if (USE_MOCK_DATA) return MOCK_MESSAGES.filter(m => m.user_id === userId).slice(0, limit);
   return safeQuery(`
@@ -313,64 +239,12 @@ export async function fetchUserNotes(userId: string): Promise<OperatorNote[]> {
   `, [userId]);
 }
 
-export async function fetchCreditHistory(userId: string): Promise<CreditLedgerEntry[]> {
-  if (USE_MOCK_DATA) return [];
-  return safeQuery(`
-    SELECT cl.* FROM ${s}credit_ledger cl
-    JOIN ${s}billing_accounts ba ON cl.billing_account_id = ba.id
-    WHERE ba.user_id = $1
-    ORDER BY cl.created_at DESC
-    LIMIT 50
-  `, [userId]);
-}
-
-export async function addCredits(userId: string, amount: number, description: string): Promise<{ success: boolean; newBalance?: number; error?: string }> {
-  const p = getPool();
-  if (!p) return { success: false, error: 'Database not available' };
-  
-  const client = await p.connect();
-  try {
-    await client.query('BEGIN');
-    
-    const baResult = await client.query(`SELECT id, credits_balance FROM ${s}billing_accounts WHERE user_id = $1`, [userId]);
-    if (baResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { success: false, error: 'No billing account found' };
-    }
-    
-    const ba = baResult.rows[0];
-    const newBalance = ba.credits_balance + amount;
-    
-    await client.query(`UPDATE ${s}billing_accounts SET credits_balance = $1, updated_at = NOW() WHERE id = $2`, [newBalance, ba.id]);
-    
-    await client.query(`
-      INSERT INTO ${s}credit_ledger (billing_account_id, user_id, change_amount, change_type, balance_after, description)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [ba.id, userId, amount, amount > 0 ? 'admin_add' : 'admin_deduct', newBalance, description]);
-    
-    await client.query('COMMIT');
-    return { success: true, newBalance };
-  } catch (error: any) {
-    await client.query('ROLLBACK');
-    return { success: false, error: error.message };
-  } finally {
-    client.release();
-  }
-}
-
 export async function addOperatorNote(userId: string, note: string, createdBy: string, tags?: string[]): Promise<OperatorNote | null> {
   const rows = await safeQuery(`
     INSERT INTO ${s}operator_notes (user_id, note, created_by, tags)
     VALUES ($1, $2, $3, $4)
     RETURNING *
   `, [userId, note, createdBy, tags || []]);
-  return rows[0] || null;
-}
-
-export async function updateRoutineStatus(routineId: string, status: string): Promise<HealthRoutine | null> {
-  const rows = await safeQuery(`
-    UPDATE ${s}health_routines SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *
-  `, [status, routineId]);
   return rows[0] || null;
 }
 
@@ -386,7 +260,7 @@ export async function fetchDashboardStats(): Promise<{
       totalUsers: MOCK_USERS.length,
       activeUsers: MOCK_USERS.filter(u => u.status === 'active').length,
       totalCredits: MOCK_USERS.reduce((sum, u) => sum + (u.credits_balance || 0), 0),
-      activeRoutines: MOCK_ROUTINES.filter(r => r.status === 'active').length,
+      activeRoutines: 0,
       needsHuman: MOCK_USERS.filter(u => u.needs_human).length,
     };
   }
@@ -514,9 +388,10 @@ export interface SystemHealth {
   totalAiCalls24h: number;
   avgResponseTimeMs: number;
   errorCount24h: number;
-  circuitBreakerStatus: string;
-  creditsUsed24h: number;
   activeConversations: number;
+  totalMessagesAllTime: number;
+  totalUsersAllTime: number;
+  totalAiCallsAllTime: number;
 }
 
 export async function fetchSystemHealth(): Promise<SystemHealth> {
@@ -526,9 +401,10 @@ export async function fetchSystemHealth(): Promise<SystemHealth> {
       totalAiCalls24h: 0,
       avgResponseTimeMs: 0,
       errorCount24h: 0,
-      circuitBreakerStatus: 'closed',
-      creditsUsed24h: 0,
       activeConversations: 0,
+      totalMessagesAllTime: 0,
+      totalUsersAllTime: 0,
+      totalAiCallsAllTime: 0,
     };
   }
 
@@ -538,20 +414,17 @@ export async function fetchSystemHealth(): Promise<SystemHealth> {
       (SELECT COUNT(*) FROM ${s}ai_usage WHERE created_at > NOW() - INTERVAL '24 hours') as total_ai_calls_24h,
       (SELECT COALESCE(AVG(latency_ms), 0) FROM ${s}ai_usage WHERE created_at > NOW() - INTERVAL '24 hours') as avg_response_time_ms,
       (SELECT COUNT(*) FROM ${s}execution_logs WHERE status = 'error' AND created_at > NOW() - INTERVAL '24 hours') as error_count_24h,
-      (SELECT COALESCE(state, 'closed') FROM ${s}circuit_breakers WHERE service_name = 'claude_api' LIMIT 1) as circuit_breaker_status,
-      (SELECT COALESCE(SUM(ABS(change_amount)), 0) FROM ${s}credit_ledger WHERE change_type = 'work_action' AND created_at > NOW() - INTERVAL '24 hours') as credits_used_24h,
-      (SELECT COUNT(*) FROM ${s}conversation_state WHERE last_message_at > NOW() - INTERVAL '1 hour') as active_conversations
+      (SELECT COUNT(*) FROM ${s}conversation_state WHERE last_message_at > NOW() - INTERVAL '1 hour') as active_conversations,
+      (SELECT COUNT(*) FROM ${s}messages) as total_messages_all_time,
+      (SELECT COUNT(*) FROM ${s}users WHERE deleted_at IS NULL) as total_users_all_time,
+      (SELECT COUNT(*) FROM ${s}ai_usage) as total_ai_calls_all_time
   `);
 
   if (rows.length === 0) {
     return {
-      totalMessages24h: 0,
-      totalAiCalls24h: 0,
-      avgResponseTimeMs: 0,
-      errorCount24h: 0,
-      circuitBreakerStatus: 'closed',
-      creditsUsed24h: 0,
-      activeConversations: 0,
+      totalMessages24h: 0, totalAiCalls24h: 0, avgResponseTimeMs: 0,
+      errorCount24h: 0, activeConversations: 0,
+      totalMessagesAllTime: 0, totalUsersAllTime: 0, totalAiCallsAllTime: 0,
     };
   }
 
@@ -560,96 +433,127 @@ export async function fetchSystemHealth(): Promise<SystemHealth> {
     totalAiCalls24h: parseInt(rows[0].total_ai_calls_24h) || 0,
     avgResponseTimeMs: Math.round(parseFloat(rows[0].avg_response_time_ms) || 0),
     errorCount24h: parseInt(rows[0].error_count_24h) || 0,
-    circuitBreakerStatus: rows[0].circuit_breaker_status || 'closed',
-    creditsUsed24h: parseInt(rows[0].credits_used_24h) || 0,
     activeConversations: parseInt(rows[0].active_conversations) || 0,
+    totalMessagesAllTime: parseInt(rows[0].total_messages_all_time) || 0,
+    totalUsersAllTime: parseInt(rows[0].total_users_all_time) || 0,
+    totalAiCallsAllTime: parseInt(rows[0].total_ai_calls_all_time) || 0,
   };
 }
 
-// Appointments
-export interface Appointment {
-  id: string;
-  user_email: string;
-  provider_id?: string;
-  scheduled_at: string;
-  status: string;
-  type: string;
-  reason?: string;
-  notes?: string;
-  meeting_link?: string;
-  created_at: string;
-  provider_name?: string;
+// Circuit Breaker details (all services)
+export interface CircuitBreakerInfo {
+  serviceName: string;
+  state: string;
+  failureCount: number;
+  lastFailureAt: string | null;
+  failureThreshold: number;
+  recoveryTimeoutSeconds: number;
 }
 
-export async function fetchUpcomingAppointments(): Promise<Appointment[]> {
+export async function fetchCircuitBreakers(): Promise<CircuitBreakerInfo[]> {
   if (USE_MOCK_DATA) return [];
-  return safeQuery(`
-    SELECT
-      a.*,
-      p.name as provider_name
-    FROM ${s}appointments a
-    LEFT JOIN ${s}providers p ON a.provider_id = p.id::text
-    WHERE a.scheduled_at >= NOW() AND a.status != 'cancelled'
-    ORDER BY a.scheduled_at ASC
-    LIMIT 10
-  `);
-}
-
-// Provider stats
-export interface Provider {
-  id: string;
-  name: string;
-  specialty?: string;
-  clinic?: string;
-  phone?: string;
-  email?: string;
-  status: string;
-  appointment_count?: number;
-}
-
-export async function fetchProviders(): Promise<Provider[]> {
-  if (USE_MOCK_DATA) return [];
-  return safeQuery(`
-    SELECT
-      p.*,
-      (SELECT COUNT(*) FROM ${s}appointments WHERE provider_id = p.id::text) as appointment_count
-    FROM ${s}providers p
-    WHERE p.status = 'active'
-    ORDER BY p.name
-  `);
-}
-
-// Health Vault Summary for a user
-export interface VaultSummary {
-  conditions_count: number;
-  medications_count: number;
-  allergies_count: number;
-  has_profile: boolean;
-}
-
-export async function fetchUserVaultSummary(userId: string): Promise<VaultSummary> {
-  if (USE_MOCK_DATA) {
-    return { conditions_count: 0, medications_count: 0, allergies_count: 0, has_profile: false };
-  }
-
   const rows = await safeQuery(`
-    SELECT
-      (SELECT COUNT(*) FROM ${s}vault_conditions WHERE user_id = $1) as conditions_count,
-      (SELECT COUNT(*) FROM ${s}vault_medications WHERE user_id = $1) as medications_count,
-      (SELECT COUNT(*) FROM ${s}vault_allergies WHERE user_id = $1) as allergies_count,
-      (SELECT EXISTS(SELECT 1 FROM ${s}vault_profiles WHERE user_id = $1)) as has_profile
-  `, [userId]);
+    SELECT service_name, state, failure_count, last_failure_at,
+           failure_threshold, recovery_timeout_seconds
+    FROM ${s}circuit_breakers
+    ORDER BY service_name
+  `);
+  return rows.map(r => ({
+    serviceName: r.service_name,
+    state: r.state || 'closed',
+    failureCount: parseInt(r.failure_count) || 0,
+    lastFailureAt: r.last_failure_at,
+    failureThreshold: parseInt(r.failure_threshold) || 5,
+    recoveryTimeoutSeconds: parseInt(r.recovery_timeout_seconds) || 60,
+  }));
+}
 
-  if (rows.length === 0) {
-    return { conditions_count: 0, medications_count: 0, allergies_count: 0, has_profile: false };
+// AI Usage Stats (all-time + 24h cost/token breakdown)
+export interface AiUsageStats {
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  cost24h: number;
+  inputTokens24h: number;
+  outputTokens24h: number;
+  avgLatency24h: number;
+  modelBreakdown: Array<{ model: string; calls: number; cost: number }>;
+}
+
+export async function fetchAiUsageStats(): Promise<AiUsageStats> {
+  if (USE_MOCK_DATA) {
+    return {
+      totalCostUsd: 0, totalInputTokens: 0, totalOutputTokens: 0,
+      cost24h: 0, inputTokens24h: 0, outputTokens24h: 0, avgLatency24h: 0,
+      modelBreakdown: [],
+    };
   }
+
+  const [totals, recent, models] = await Promise.all([
+    safeQuery(`
+      SELECT
+        COALESCE(SUM(cost_usd), 0) as total_cost,
+        COALESCE(SUM(input_tokens), 0) as total_input,
+        COALESCE(SUM(output_tokens), 0) as total_output
+      FROM ${s}ai_usage
+    `),
+    safeQuery(`
+      SELECT
+        COALESCE(SUM(cost_usd), 0) as cost_24h,
+        COALESCE(SUM(input_tokens), 0) as input_24h,
+        COALESCE(SUM(output_tokens), 0) as output_24h,
+        COALESCE(AVG(latency_ms), 0) as avg_latency_24h
+      FROM ${s}ai_usage
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+    `),
+    safeQuery(`
+      SELECT model, COUNT(*) as calls, COALESCE(SUM(cost_usd), 0) as cost
+      FROM ${s}ai_usage
+      GROUP BY model
+      ORDER BY calls DESC
+    `),
+  ]);
 
   return {
-    conditions_count: parseInt(rows[0].conditions_count) || 0,
-    medications_count: parseInt(rows[0].medications_count) || 0,
-    allergies_count: parseInt(rows[0].allergies_count) || 0,
-    has_profile: rows[0].has_profile || false,
+    totalCostUsd: parseFloat(totals[0]?.total_cost) || 0,
+    totalInputTokens: parseInt(totals[0]?.total_input) || 0,
+    totalOutputTokens: parseInt(totals[0]?.total_output) || 0,
+    cost24h: parseFloat(recent[0]?.cost_24h) || 0,
+    inputTokens24h: parseInt(recent[0]?.input_24h) || 0,
+    outputTokens24h: parseInt(recent[0]?.output_24h) || 0,
+    avgLatency24h: Math.round(parseFloat(recent[0]?.avg_latency_24h) || 0),
+    modelBreakdown: models.map(m => ({
+      model: m.model || 'unknown',
+      calls: parseInt(m.calls) || 0,
+      cost: parseFloat(m.cost) || 0,
+    })),
   };
+}
+
+// Recent Executions log
+export interface RecentExecution {
+  status: string;
+  executionTimeMs: number;
+  createdAt: string;
+  intentType: string | null;
+  nodeName: string | null;
+}
+
+export async function fetchRecentExecutions(limit = 10): Promise<RecentExecution[]> {
+  if (USE_MOCK_DATA) return [];
+  const rows = await safeQuery(`
+    SELECT status, execution_time_ms, created_at, intent_type, node_name
+    FROM ${s}execution_logs
+    ORDER BY created_at DESC
+    LIMIT $1
+  `, [limit]);
+  return rows.map(r => ({
+    status: r.status || 'unknown',
+    executionTimeMs: parseInt(r.execution_time_ms) || 0,
+    createdAt: r.created_at,
+    intentType: r.intent_type,
+    nodeName: r.node_name,
+  }));
 }
 
 // Recent activity feed
@@ -828,81 +732,6 @@ export async function fetchUserGrowth(days = 30): Promise<UserGrowth[]> {
       cumulative::int
     FROM cumulative
     ORDER BY date ASC
-  `);
-}
-
-// Credits usage over time
-export interface CreditsUsage {
-  date: string;
-  credits_used: number;
-  credits_added: number;
-}
-
-export async function fetchCreditsUsage(days = 14): Promise<CreditsUsage[]> {
-  if (USE_MOCK_DATA) return [];
-  return safeQuery(`
-    WITH date_series AS (
-      SELECT generate_series(
-        CURRENT_DATE - INTERVAL '${days - 1} days',
-        CURRENT_DATE,
-        '1 day'::interval
-      )::date as date
-    ),
-    daily_credits AS (
-      SELECT
-        DATE(created_at) as date,
-        SUM(CASE WHEN change_amount < 0 THEN ABS(change_amount) ELSE 0 END) as credits_used,
-        SUM(CASE WHEN change_amount > 0 THEN change_amount ELSE 0 END) as credits_added
-      FROM ${s}credit_ledger
-      WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
-      GROUP BY DATE(created_at)
-    )
-    SELECT
-      TO_CHAR(ds.date, 'MM/DD') as date,
-      COALESCE(dc.credits_used, 0)::int as credits_used,
-      COALESCE(dc.credits_added, 0)::int as credits_added
-    FROM date_series ds
-    LEFT JOIN daily_credits dc ON ds.date = dc.date
-    ORDER BY ds.date ASC
-  `);
-}
-
-// Response time trends
-export interface ResponseTimeTrend {
-  date: string;
-  avg_latency_ms: number;
-  max_latency_ms: number;
-  request_count: number;
-}
-
-export async function fetchResponseTimeTrends(days = 7): Promise<ResponseTimeTrend[]> {
-  if (USE_MOCK_DATA) return [];
-  return safeQuery(`
-    WITH date_series AS (
-      SELECT generate_series(
-        CURRENT_DATE - INTERVAL '${days - 1} days',
-        CURRENT_DATE,
-        '1 day'::interval
-      )::date as date
-    ),
-    daily_latency AS (
-      SELECT
-        DATE(created_at) as date,
-        AVG(latency_ms) as avg_latency_ms,
-        MAX(latency_ms) as max_latency_ms,
-        COUNT(*) as request_count
-      FROM ${s}ai_usage
-      WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
-      GROUP BY DATE(created_at)
-    )
-    SELECT
-      TO_CHAR(ds.date, 'MM/DD') as date,
-      COALESCE(ROUND(dl.avg_latency_ms), 0)::int as avg_latency_ms,
-      COALESCE(dl.max_latency_ms, 0)::int as max_latency_ms,
-      COALESCE(dl.request_count, 0)::int as request_count
-    FROM date_series ds
-    LEFT JOIN daily_latency dl ON ds.date = dl.date
-    ORDER BY ds.date ASC
   `);
 }
 

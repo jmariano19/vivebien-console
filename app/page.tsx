@@ -139,11 +139,12 @@ function SystemHealthCard({ health }: { health: {
   totalAiCalls24h: number;
   avgResponseTimeMs: number;
   errorCount24h: number;
-  circuitBreakerStatus: string;
-  creditsUsed24h: number;
   activeConversations: number;
+  totalMessagesAllTime: number;
+  totalUsersAllTime: number;
+  totalAiCallsAllTime: number;
 }}) {
-  const isHealthy = health.circuitBreakerStatus === 'closed' && health.errorCount24h < 5;
+  const isHealthy = health.errorCount24h < 5 && health.avgResponseTimeMs < 5000;
 
   return (
     <div className="card">
@@ -178,16 +179,7 @@ function SystemHealthCard({ health }: { health: {
       </div>
 
       <div className="mt-4 pt-4 border-t border-ebano/10 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${
-              health.circuitBreakerStatus === 'closed' ? 'bg-success' :
-              health.circuitBreakerStatus === 'half-open' ? 'bg-warning' : 'bg-error'
-            }`}></span>
-            <span className="text-xs text-text-secondary">Circuit: {health.circuitBreakerStatus}</span>
-          </div>
-          <span className="text-xs text-text-secondary">{health.activeConversations} active conversations</span>
-        </div>
+        <span className="text-xs text-text-secondary">{health.activeConversations} active conversations</span>
         <Link href="/system-health" className="text-xs text-barro hover:underline">View Details →</Link>
       </div>
     </div>
