@@ -904,6 +904,7 @@ export async function deleteUser(userId: string): Promise<boolean> {
   try {
     await p.query('BEGIN');
     // Delete child records first (no cascade on users FK)
+    await p.query(`DELETE FROM ${s}concern_snapshots WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}messages WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}health_concerns WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}memories WHERE user_id = $1`, [userId]);
@@ -911,7 +912,6 @@ export async function deleteUser(userId: string): Promise<boolean> {
     await p.query(`DELETE FROM ${s}experiment_assignments WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}credit_transactions WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}billing_accounts WHERE user_id = $1`, [userId]);
-    await p.query(`DELETE FROM ${s}operator_notes WHERE user_id = $1`, [userId]);
     // Delete the user
     await p.query(`DELETE FROM ${s}users WHERE id = $1`, [userId]);
     await p.query('COMMIT');
