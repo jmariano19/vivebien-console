@@ -260,11 +260,35 @@ DATABASE_URL=postgres://postgres:bd894cefacb1c52998f3@projecto-1_postgress:5432/
 DB_SCHEMA=public
 ```
 
-### Deploy Process
-1. Push code to GitHub (`git push origin main`)
-2. Go to Easypanel → projecto-1 → vivebien-console
-3. Click **Deploy** (green button, top left)
-4. Wait for build to complete (~30-60 seconds)
+### Auto-Deploy Pipeline (GitHub → Easypanel)
+
+Pushing to `main` automatically deploys:
+
+1. Code is pushed to `main` branch on GitHub
+2. GitHub Actions workflow (`.github/workflows/deploy.yml`) runs automatically
+3. The workflow calls the Easypanel deploy webhook (stored as GitHub secret)
+4. Easypanel rebuilds the Docker container
+
+**GitHub Secret:** `EASYPANEL_DEPLOY_WEBHOOK` — contains the Easypanel deploy URL
+
+### Deploy Process (for Claude)
+To deploy changes, simply commit and push to `main`:
+```bash
+git add <files>
+git commit -m "Description of changes"
+git push origin main
+```
+Deploy happens automatically — no manual steps needed.
+
+### GitHub CLI Access
+- `gh` CLI is installed via Homebrew at `/opt/homebrew/bin/gh`
+- Authenticated as **jmariano19** via `gh auth login`
+- If `gh` is not in PATH, use full path: `/opt/homebrew/bin/gh`
+
+### Manual Deploy (if needed)
+1. Go to Easypanel → projecto-1 → vivebien-console
+2. Click **Deploy** (green button, top left)
+3. Wait for build to complete (~30-60 seconds)
 
 ### Docker Build
 The Dockerfile uses multi-stage builds:
@@ -367,3 +391,16 @@ These were cleaned up as unnecessary:
 | n8n DevOps | Workflow ID: dEoR_KiQ2LQYAE7Q9Jv9E |
 | Core Bot Repo | https://github.com/jmariano19/vivebien-core |
 | Core Bot HANDOFF | See vivebien-project/HANDOFF.md |
+
+---
+
+## GitHub Push Access (for Claude)
+
+At the start of each session, configure git to push directly:
+
+```bash
+TOKEN=$(cat .github-token)
+git remote set-url origin https://jmariano19:${TOKEN}@github.com/jmariano19/vivebien-console.git
+```
+
+The token is stored in `.github-token` (gitignored, never committed). After configuring, Claude can push and deploy directly.
