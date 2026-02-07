@@ -27,10 +27,10 @@ Browser → Next.js (Server Components) → PostgreSQL
                                     Same DB as vivebien-core
 ```
 
-All pages use `force-dynamic` and `revalidate = 0` for real-time data. There is no client-side data fetching — everything is server-rendered.
+All pages use `force-dynamic` and `revalidate = 0` for real-time data. There is no client-side data fetching — everything is server-rendered. The one exception is `DeleteButton.tsx`, a `'use client'` component that calls a DELETE API route.
 
 ### Relationship to vivebien-core
-The dashboard is **read-only** against the same database that `vivebien-core` (the WhatsApp bot backend) writes to. The core bot handles: WhatsApp messages via Chatwoot, AI responses via Claude, voice transcription via OpenAI Whisper, and image analysis via Claude Vision.
+The dashboard is **mostly read-only** against the same database that `vivebien-core` (the WhatsApp bot backend) writes to. The one write operation is the Delete Patient feature (`DELETE /api/users/:id`). The core bot handles: WhatsApp messages via Chatwoot, AI responses via Claude, voice transcription via OpenAI Whisper, and image analysis via Claude Vision.
 
 ---
 
@@ -81,7 +81,7 @@ const s = SCHEMA === 'public' ? '' : `${SCHEMA}.`;
 | `circuit_breakers` | Service health (chatwoot_api, claude_api, twilio_api) | System health status |
 | `circuit_breaker_state` | Circuit breaker state tracking | System health |
 | `execution_logs` | Job execution history (status, execution_time_ms) | System health recent executions |
-| `operator_notes` | Admin notes on patients (user_id, note, tags) | Patient detail |
+| `concern_snapshots` | Historical concern snapshots (user_id) | Referenced in delete cascades |
 | `vault_profiles` | Medical vault data | Patient detail |
 | `vault_medications` | Patient medications | Patient detail |
 | `vault_conditions` | Patient conditions | Patient detail |
@@ -105,6 +105,7 @@ vivebien-dashboard-local/
 ├── app/
 │   ├── page.tsx                    # Main dashboard (stats, patients, follow-ups, system health)
 │   ├── layout.tsx                  # Root layout with nav, ViveBien branding
+│   ├── DeleteButton.tsx             # Client component: delete patient with confirmation
 │   ├── MobileNav.tsx               # Mobile navigation component
 │   ├── globals.css                 # Tailwind + custom ViveBien design tokens
 │   ├── loading.tsx                 # Loading skeleton
@@ -119,7 +120,10 @@ vivebien-dashboard-local/
 │   │       └── PatientTabs.tsx     # Client component for tab navigation
 │   ├── system-health/
 │   │   └── page.tsx                # System health (circuit breakers, AI usage, DB overview, executions)
-│   └── api/                        # API routes (if any)
+│   └── api/
+│       └── users/
+│           └── [id]/
+│               └── route.ts        # DELETE /api/users/:id — deletes user + all child records
 ├── lib/
 │   └── db.ts                       # ALL database queries (~897 lines). Single source of truth.
 ├── public/                         # Static assets (logo, favicon)
@@ -135,7 +139,7 @@ vivebien-dashboard-local/
 
 ## Key File: lib/db.ts
 
-This is the most important file. It contains ALL database access logic — every query, interface, and data function. There is no ORM.
+This is the most important file. It contains ALL database access logic — every query, interface, and data function. There is no ORM. ~925 lines.
 
 ### Exported Functions (grouped by page)
 
@@ -146,6 +150,7 @@ This is the most important file. It contains ALL database access logic — every
 - `fetchEngagementOpportunities()` — Users needing attention
 - `fetchSystemHealth()` — Quick system health check
 - `fetchRecentActivity(limit)` — Recent activity feed
+- `deleteUser(userId)` — Delete a user and all child records in a transaction (used by DELETE API route)
 
 **Patient Detail (patient/[id]/page.tsx)**:
 - `fetchUserById(id)` — Single user with full details
@@ -375,8 +380,12 @@ These were cleaned up as unnecessary:
 
 ---
 
-## Recent Changes (Feb 5, 2026)
+## Recent Changes
 
+### Feb 7, 2026
+1. **Delete Patient feature**: Added Delete button next to View in the patient table. Uses a `'use client'` component (`DeleteButton.tsx`) that calls `DELETE /api/users/:id`. Shows confirmation dialog before deleting. Deletes all child records (concern_snapshots, messages, health_concerns, memories, conversation_state, experiment_assignments, credit_transactions, billing_accounts) in a transaction, then deletes the user. Page refreshes via `router.refresh()` after deletion.
+
+### Feb 5, 2026
 1. **System Health page rewrite**: Real circuit breaker data, AI usage with all-time vs 24h labels, database overview, recent executions
 2. **AI Usage includes media costs**: `fetchAiUsageStats()` now queries `production.media` for Whisper/Vision costs alongside `ai_usage` for Claude chat costs
 3. **Analytics improvements**: BarChart/LineChart with hover tooltips and spaced date labels, today's active users section
