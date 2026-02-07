@@ -322,12 +322,22 @@ npm run dev
 
 ---
 
-## n8n DevOps Gateway
+## Database Access (for Claude)
 
-There's an n8n workflow (`Claude_DevOps_Gateway_v3`, ID: `dEoR_KiQ2LQYAE7Q9Jv9E`) that can execute arbitrary SQL against the production database. This is useful for querying data or making changes:
+### Direct Access via psql (Preferred)
+```bash
+/opt/homebrew/opt/libpq/bin/psql "postgres://postgres:bd894cefacb1c52998f3@85.209.95.19:5432/projecto-1" -c "SELECT * FROM users LIMIT 5"
+```
+- **psql path**: `/opt/homebrew/opt/libpq/bin/psql`
+- **Connection**: `postgres://postgres:bd894cefacb1c52998f3@85.209.95.19:5432/projecto-1`
+- Supports multi-statement queries, faster than n8n
+
+### n8n DevOps Gateway (Backup)
+There's an n8n workflow (`Claude_DevOps_Gateway_v3`, ID: `dEoR_KiQ2LQYAE7Q9Jv9E`) that can execute SQL against the production database:
 
 - **Webhook**: POST to `https://projecto-1-n8n.yydhsb.easypanel.host/webhook/claude-devops`
 - **Body**: `{ "tool": "database", "query": "SELECT * FROM users LIMIT 5;" }`
+- **Run one query per call** — multiple statements will fail
 
 ---
 
