@@ -193,12 +193,12 @@ const MOCK_MESSAGES: Message[] = [
 export async function fetchUsers(): Promise<UserWithDetails[]> {
   if (USE_MOCK_DATA) return MOCK_USERS;
   return safeQuery(`
-    SELECT 
+    SELECT
       u.id, u.phone, u.preferred_name, u.name, u.status, u.created_at, u.preferred_language,
       ba.credits_balance, ba.credits_used_this_period, ba.subscription_status,
       cs.current_topic, cs.emotional_state, cs.needs_human, cs.last_message_at,
       (SELECT COUNT(*) FROM ${s}messages WHERE user_id = u.id) as message_count,
-      (SELECT COUNT(*) FROM ${s}health_routines WHERE user_id = u.id) as routine_count
+      0 as routine_count
     FROM ${s}users u
     LEFT JOIN ${s}billing_accounts ba ON ba.user_id = u.id
     LEFT JOIN ${s}conversation_state cs ON cs.user_id = u.id
@@ -270,7 +270,7 @@ export async function fetchDashboardStats(): Promise<{
       (SELECT COUNT(*) FROM ${s}users WHERE deleted_at IS NULL) as total_users,
       (SELECT COUNT(*) FROM ${s}users WHERE status = 'active' AND deleted_at IS NULL) as active_users,
       (SELECT COALESCE(SUM(credits_balance), 0) FROM ${s}billing_accounts) as total_credits,
-      (SELECT COUNT(*) FROM ${s}health_routines WHERE status = 'active') as active_routines,
+      0 as active_routines,
       (SELECT COUNT(*) FROM ${s}conversation_state WHERE needs_human = true) as needs_human
   `);
 
@@ -632,13 +632,13 @@ export async function fetchRecentActivity(limit = 15): Promise<ActivityItem[]> {
       UNION ALL
 
       SELECT
-        cl.id::text,
+        ct.id::text,
         'credit' as type,
-        cl.user_id,
-        cl.change_type || ': ' || cl.change_amount || ' credits' as description,
-        cl.created_at
-      FROM ${s}credit_ledger cl
-      WHERE cl.created_at > NOW() - INTERVAL '24 hours'
+        ct.user_id,
+        ct.action || ': ' || ct.amount || ' credits' as description,
+        ct.created_at
+      FROM ${s}credit_transactions ct
+      WHERE ct.created_at > NOW() - INTERVAL '24 hours'
     )
     SELECT
       a.*,
