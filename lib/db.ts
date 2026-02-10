@@ -580,6 +580,111 @@ export async function fetchAiUsageStats(): Promise<AiUsageStats> {
   };
 }
 
+// Monthly Cost Tracker
+export interface MonthlyBreakdown {
+  month: string;       // e.g. "2026-02"
+  aiCost: number;      // Claude API cost
+  mediaCost: number;   // Whisper + Vision cost
+  totalCost: number;   // AI + media combined
+  aiCalls: number;
+  messages: number;
+}
+
+export interface MonthlyCosts {
+  currentMonth: MonthlyBreakdown;
+  previousMonth: MonthlyBreakdown;
+  monthlyHistory: MonthlyBreakdown[];
+  costPerMessage: number;
+}
+
+export async function fetchMonthlyCosts(): Promise<MonthlyCosts> {
+  if (USE_MOCK_DATA) {
+    const empty: MonthlyBreakdown = { month: '', aiCost: 0, mediaCost: 0, totalCost: 0, aiCalls: 0, messages: 0 };
+    return { currentMonth: empty, previousMonth: empty, monthlyHistory: [], costPerMessage: 0 };
+  }
+
+  const [aiMonthly, mediaMonthly, msgMonthly] = await Promise.all([
+    // AI usage costs grouped by month
+    safeQuery(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+        COALESCE(SUM(cost_usd), 0) as cost,
+        COUNT(*) as calls
+      FROM ${s}ai_usage
+      WHERE created_at > NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month DESC
+    `),
+    // Media costs (Whisper/Vision) grouped by month
+    safeQuery(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+        COALESCE(SUM(ai_cost_usd), 0) as cost
+      FROM production.media
+      WHERE ai_model IS NOT NULL
+        AND created_at > NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month DESC
+    `),
+    // Message volume grouped by month
+    safeQuery(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+        COUNT(*) as count
+      FROM ${s}messages
+      WHERE created_at > NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month DESC
+    `),
+  ]);
+
+  // Build a map of months
+  const monthMap = new Map<string, MonthlyBreakdown>();
+
+  for (const row of aiMonthly) {
+    const m = row.month;
+    if (!monthMap.has(m)) monthMap.set(m, { month: m, aiCost: 0, mediaCost: 0, totalCost: 0, aiCalls: 0, messages: 0 });
+    const entry = monthMap.get(m)!;
+    entry.aiCost = parseFloat(row.cost) || 0;
+    entry.aiCalls = parseInt(row.calls) || 0;
+  }
+
+  for (const row of mediaMonthly) {
+    const m = row.month;
+    if (!monthMap.has(m)) monthMap.set(m, { month: m, aiCost: 0, mediaCost: 0, totalCost: 0, aiCalls: 0, messages: 0 });
+    monthMap.get(m)!.mediaCost = parseFloat(row.cost) || 0;
+  }
+
+  for (const row of msgMonthly) {
+    const m = row.month;
+    if (!monthMap.has(m)) monthMap.set(m, { month: m, aiCost: 0, mediaCost: 0, totalCost: 0, aiCalls: 0, messages: 0 });
+    monthMap.get(m)!.messages = parseInt(row.count) || 0;
+  }
+
+  // Calculate totals and sort
+  const allEntries = Array.from(monthMap.values());
+  allEntries.forEach(entry => {
+    entry.totalCost = entry.aiCost + entry.mediaCost;
+  });
+
+  const history = allEntries.sort((a, b) => b.month.localeCompare(a.month));
+
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+  const empty: MonthlyBreakdown = { month: '', aiCost: 0, mediaCost: 0, totalCost: 0, aiCalls: 0, messages: 0 };
+  const currentMonth = monthMap.get(currentMonthStr) || { ...empty, month: currentMonthStr };
+  const previousMonth = monthMap.get(prevMonthStr) || { ...empty, month: prevMonthStr };
+
+  const costPerMessage = currentMonth.messages > 0
+    ? currentMonth.totalCost / currentMonth.messages
+    : 0;
+
+  return { currentMonth, previousMonth, monthlyHistory: history, costPerMessage };
+}
+
 // Recent Executions log
 export interface RecentExecution {
   status: string;

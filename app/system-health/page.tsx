@@ -1,4 +1,4 @@
-import { fetchSystemHealth, fetchCircuitBreakers, fetchAiUsageStats, fetchRecentExecutions } from '@/lib/db';
+import { fetchSystemHealth, fetchCircuitBreakers, fetchAiUsageStats, fetchRecentExecutions, fetchMonthlyCosts } from '@/lib/db';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -78,12 +78,28 @@ function timeAgo(dateStr: string): string {
 }
 
 export default async function SystemHealthPage() {
-  const [health, breakers, aiStats, recentExecs] = await Promise.all([
+  const [health, breakers, aiStats, recentExecs, monthlyCosts] = await Promise.all([
     fetchSystemHealth(),
     fetchCircuitBreakers(),
     fetchAiUsageStats(),
     fetchRecentExecutions(8),
+    fetchMonthlyCosts(),
   ]);
+
+  // Fixed infrastructure costs (update these when your plans change)
+  const INFRA_COSTS = [
+    { name: 'Hostinger VPS', cost: 7.00 },
+    { name: 'Domain (vivebien.io)', cost: 1.00 },
+    { name: 'Chatwoot (self-hosted)', cost: 0 },
+    { name: 'n8n (self-hosted)', cost: 0 },
+    { name: 'WhatsApp API (free tier)', cost: 0 },
+  ];
+  const totalInfraCost = INFRA_COSTS.reduce((sum, item) => sum + item.cost, 0);
+  const totalMonthlyCost = monthlyCosts.currentMonth.totalCost + totalInfraCost;
+  const prevTotalCost = monthlyCosts.previousMonth.totalCost + totalInfraCost;
+  const monthChange = prevTotalCost > 0
+    ? ((totalMonthlyCost - prevTotalCost) / prevTotalCost * 100)
+    : 0;
 
   // Determine statuses
   const messagesStatus = health.totalMessages24h > 0 ? 'healthy' : 'warning';
@@ -232,6 +248,125 @@ export default async function SystemHealthPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Monthly Cost Tracker */}
+      <div className="card border-2 border-barro/20">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold text-lg text-ebano">Monthly Cost Tracker</h3>
+          <span className="text-xs text-text-muted bg-chamomile/50 rounded-full px-3 py-1">
+            {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+
+        {/* Total Monthly Cost + Change */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="text-center p-5 bg-barro/5 rounded-xl border border-barro/15">
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-1">Total This Month</p>
+            <p className="text-4xl font-bold text-barro">${totalMonthlyCost.toFixed(2)}</p>
+            {monthlyCosts.previousMonth.totalCost > 0 && (
+              <p className={`text-sm mt-1 ${monthChange >= 0 ? 'text-error' : 'text-success'}`}>
+                {monthChange >= 0 ? '↑' : '↓'} {Math.abs(monthChange).toFixed(0)}% vs last month
+              </p>
+            )}
+          </div>
+          <div className="text-center p-5 bg-chamomile/30 rounded-xl">
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-1">Cost per Message</p>
+            <p className="text-4xl font-bold text-info">
+              {monthlyCosts.costPerMessage > 0 ? `$${monthlyCosts.costPerMessage.toFixed(4)}` : '—'}
+            </p>
+            <p className="text-sm text-text-muted mt-1">{monthlyCosts.currentMonth.messages} messages this month</p>
+          </div>
+          <div className="text-center p-5 bg-chamomile/30 rounded-xl">
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-1">AI Calls This Month</p>
+            <p className="text-4xl font-bold text-success">{monthlyCosts.currentMonth.aiCalls}</p>
+            <p className="text-sm text-text-muted mt-1">${monthlyCosts.currentMonth.totalCost.toFixed(2)} variable cost</p>
+          </div>
+        </div>
+
+        {/* Cost Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Variable Costs */}
+          <div>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-3">Variable Costs (APIs)</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-chamomile/20">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                  <span className="text-sm font-medium text-ebano">Claude API</span>
+                </div>
+                <span className="text-sm font-semibold text-ebano">${monthlyCosts.currentMonth.aiCost.toFixed(3)}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-chamomile/20">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-info"></span>
+                  <span className="text-sm font-medium text-ebano">Whisper / Vision</span>
+                </div>
+                <span className="text-sm font-semibold text-ebano">${monthlyCosts.currentMonth.mediaCost.toFixed(3)}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-barro/5 border border-barro/10">
+                <span className="text-sm font-semibold text-ebano">Variable Total</span>
+                <span className="text-sm font-bold text-barro">${monthlyCosts.currentMonth.totalCost.toFixed(3)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Fixed Infrastructure Costs */}
+          <div>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-3">Fixed Costs (Infrastructure)</p>
+            <div className="space-y-2">
+              {INFRA_COSTS.filter(item => item.cost > 0).map((item) => (
+                <div key={item.name} className="flex items-center justify-between p-3 rounded-lg bg-chamomile/20">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-success"></span>
+                    <span className="text-sm font-medium text-ebano">{item.name}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-ebano">${item.cost.toFixed(2)}</span>
+                </div>
+              ))}
+              {INFRA_COSTS.filter(item => item.cost === 0).length > 0 && (
+                <div className="p-3 rounded-lg bg-chamomile/20">
+                  <span className="text-xs text-text-muted">
+                    Free: {INFRA_COSTS.filter(item => item.cost === 0).map(item => item.name.split(' (')[0]).join(', ')}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-barro/5 border border-barro/10">
+                <span className="text-sm font-semibold text-ebano">Fixed Total</span>
+                <span className="text-sm font-bold text-barro">${totalInfraCost.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly History */}
+        {monthlyCosts.monthlyHistory.length > 1 && (
+          <div className="mt-6">
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wide mb-3">Monthly History</p>
+            <div className="space-y-2">
+              {monthlyCosts.monthlyHistory.slice(0, 6).map((m) => {
+                const mTotal = m.totalCost + totalInfraCost;
+                const monthName = new Date(m.month + '-01').toLocaleString('default', { month: 'short', year: 'numeric' });
+                const maxCost = Math.max(...monthlyCosts.monthlyHistory.map(h => h.totalCost + totalInfraCost), 1);
+                const barWidth = Math.max((mTotal / maxCost) * 100, 2);
+                return (
+                  <div key={m.month} className="flex items-center gap-3">
+                    <span className="text-xs text-text-muted w-20 shrink-0">{monthName}</span>
+                    <div className="flex-1 h-6 bg-chamomile/30 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-barro/70 rounded-full flex items-center justify-end pr-2"
+                        style={{ width: `${barWidth}%`, minWidth: '40px' }}
+                      >
+                        <span className="text-[10px] font-semibold text-white">${mTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs text-text-muted w-16 text-right shrink-0">{m.messages} msgs</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* AI Usage Stats */}
