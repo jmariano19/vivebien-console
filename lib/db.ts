@@ -1027,3 +1027,163 @@ export async function deleteUser(userId: string): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================================================
+// Plato Inteligente — Client Queries
+// ============================================================================
+
+export interface ClientSummary {
+  id: string;
+  userId: string;
+  name: string | null;
+  phone: string;
+  language: string;
+  archetype: string;
+  coachingPhase: string;
+  patternsConfirmed: number;
+  graduationPending: boolean;
+  eventCount: number;
+  lastEventAt: string | null;
+  createdAt: string;
+}
+
+export interface ClientDetail {
+  id: string;
+  userId: string;
+  name: string | null;
+  phone: string;
+  language: string;
+  archetype: string;
+  archetypeScores: Record<string, number>;
+  coachingPhase: string;
+  onboardingAnswers: Array<{ question: number; answer: string }>;
+  patternsConfirmed: number;
+  graduationPending: boolean;
+  graduatedAt: string | null;
+  coachNotes: string | null;
+  behavioralData: Record<string, unknown>;
+  recentEvents: Array<{
+    id: string;
+    rawInput: string | null;
+    imageUrl: string | null;
+    isQuestion: boolean;
+    eventType: string | null;
+    eventDate: string;
+    createdAt: string;
+  }>;
+  createdAt: string;
+}
+
+export async function fetchClients(): Promise<ClientSummary[]> {
+  const rows = await safeQuery(`
+    SELECT
+      cp.id,
+      cp.user_id,
+      u.name,
+      u.phone,
+      u.language,
+      cp.archetype,
+      cp.coaching_phase,
+      cp.patterns_confirmed,
+      cp.graduation_pending,
+      cp.created_at,
+      COUNT(he.id)::int AS event_count,
+      MAX(he.created_at) AS last_event_at
+    FROM ${s}client_profiles cp
+    JOIN ${s}users u ON u.id = cp.user_id
+    LEFT JOIN ${s}health_events he ON he.user_id = cp.user_id
+    GROUP BY cp.id, u.name, u.phone, u.language
+    ORDER BY last_event_at DESC NULLS LAST
+  `);
+
+  return rows.map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    phone: r.phone,
+    language: r.language,
+    archetype: r.archetype,
+    coachingPhase: r.coaching_phase,
+    patternsConfirmed: r.patterns_confirmed,
+    graduationPending: r.graduation_pending,
+    eventCount: r.event_count,
+    lastEventAt: r.last_event_at,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function fetchClientById(userId: string): Promise<ClientDetail | null> {
+  const rows = await safeQuery(`
+    SELECT
+      cp.id,
+      cp.user_id,
+      u.name,
+      u.phone,
+      u.language,
+      cp.archetype,
+      cp.archetype_scores,
+      cp.coaching_phase,
+      cp.onboarding_answers,
+      cp.patterns_confirmed,
+      cp.graduation_pending,
+      cp.graduated_at,
+      cp.coach_notes,
+      cp.behavioral_data,
+      cp.created_at
+    FROM ${s}client_profiles cp
+    JOIN ${s}users u ON u.id = cp.user_id
+    WHERE cp.user_id = $1
+  `, [userId]);
+
+  if (rows.length === 0) return null;
+  const r = rows[0];
+
+  const events = await safeQuery(`
+    SELECT id, raw_input, image_url, is_question, event_type, event_date::text, created_at
+    FROM ${s}health_events
+    WHERE user_id = $1
+    ORDER BY created_at DESC
+    LIMIT 30
+  `, [userId]);
+
+  return {
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    phone: r.phone,
+    language: r.language,
+    archetype: r.archetype,
+    archetypeScores: r.archetype_scores ?? {},
+    coachingPhase: r.coaching_phase,
+    onboardingAnswers: r.onboarding_answers ?? [],
+    patternsConfirmed: r.patterns_confirmed,
+    graduationPending: r.graduation_pending,
+    graduatedAt: r.graduated_at,
+    coachNotes: r.coach_notes,
+    behavioralData: r.behavioral_data ?? {},
+    recentEvents: events.map(e => ({
+      id: e.id,
+      rawInput: e.raw_input,
+      imageUrl: e.image_url,
+      isQuestion: e.is_question,
+      eventType: e.event_type,
+      eventDate: e.event_date,
+      createdAt: e.created_at,
+    })),
+    createdAt: r.created_at,
+  };
+}
+
+export async function updateCoachNotes(userId: string, notes: string): Promise<boolean> {
+  const p = getPool();
+  if (!p) return false;
+  try {
+    await p.query(
+      `UPDATE ${s}client_profiles SET coach_notes = $2 WHERE user_id = $1`,
+      [userId, notes]
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}

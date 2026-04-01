@@ -1,13 +1,10 @@
 import {
-  fetchUsers,
-  fetchDashboardStats,
-  fetchEngagementOpportunities,
-  fetchPendingFollowups,
+  fetchClients,
   fetchSystemHealth,
-  fetchRecentActivity
+  fetchRecentActivity,
+  type ClientSummary,
 } from '@/lib/db';
 import Link from 'next/link';
-import DeleteButton from './DeleteButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -41,67 +38,35 @@ function StatCard({ title, value, icon, color, subtitle, href }: {
   return content;
 }
 
-function StatusBadge({ status, needsHuman }: { status: string; needsHuman?: boolean }) {
-  if (needsHuman) {
+function ArchetypeBadge({ archetype }: { archetype: string }) {
+  const styles: Record<string, { bg: string; text: string; label: string }> = {
+    performance: { bg: 'bg-barro/10', text: 'text-barro', label: 'Performance' },
+    skeptic:     { bg: 'bg-ebano/10', text: 'text-ebano', label: 'Skeptic' },
+    curious:     { bg: 'bg-info/10',  text: 'text-info',  label: 'Curious' },
+    passive:     { bg: 'bg-warning/10', text: 'text-warning', label: 'Passive' },
+    unknown:     { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Unknown' },
+  };
+
+  const s = styles[archetype] ?? styles.unknown!;
+
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function PhaseBadge({ phase }: { phase: string }) {
+  if (phase === 'phase_2') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-error/10 text-error">
-        <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse-soft"></span>
-        Needs Human
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+        Phase 2
       </span>
     );
   }
-
-  const statusStyles: Record<string, string> = {
-    active: 'bg-success/10 text-success',
-    paused: 'bg-warning/10 text-warning',
-    blocked: 'bg-error/10 text-error',
-  };
-
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyles[status] || 'bg-gray-100 text-gray-600'}`}>
-      {status}
-    </span>
-  );
-}
-
-function EmotionalStateIndicator({ state }: { state?: string }) {
-  if (!state) return null;
-
-  const indicators: Record<string, { emoji: string; bg: string; label: string }> = {
-    anxious: { emoji: '😰', bg: 'bg-warning/20', label: 'Anxious' },
-    frustrated: { emoji: '😤', bg: 'bg-error/20', label: 'Frustrated' },
-    grateful: { emoji: '🙏', bg: 'bg-success/20', label: 'Grateful' },
-    calm: { emoji: '😌', bg: 'bg-info/20', label: 'Calm' },
-    neutral: { emoji: '😐', bg: 'bg-gray-100', label: 'Neutral' },
-    worried: { emoji: '😟', bg: 'bg-warning/20', label: 'Worried' },
-    hopeful: { emoji: '🌟', bg: 'bg-sancocho/20', label: 'Hopeful' },
-    confused: { emoji: '😕', bg: 'bg-info/20', label: 'Confused' },
-  };
-
-  const ind = indicators[state] || { emoji: '•', bg: 'bg-gray-100', label: state };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${ind.bg}`}
-      title={ind.label}
-    >
-      <span>{ind.emoji}</span>
-      <span className="hidden xl:inline text-text-secondary capitalize">{state}</span>
-    </span>
-  );
-}
-
-function CreditsDisplay({ balance }: { balance: number }) {
-  const isLow = balance < 10;
-  const isCritical = balance < 5;
-
-  return (
-    <span className={`font-body font-semibold flex items-center gap-1 ${
-      isCritical ? 'text-error' : isLow ? 'text-warning' : 'text-ebano'
-    }`}>
-      {balance}
-      {isCritical && <span title="Critical - needs top up">🔴</span>}
-      {isLow && !isCritical && <span title="Low credits">⚠️</span>}
+    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-chamomile text-text-secondary">
+      Phase 1
     </span>
   );
 }
@@ -122,17 +87,12 @@ function formatTimeAgo(dateString: string | null): string {
   return date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
 }
 
-function getActivityStatus(lastMessageAt: string | null): { label: string; color: string } {
-  if (!lastMessageAt) return { label: 'inactive', color: 'text-text-muted' };
-
-  const date = new Date(lastMessageAt);
-  const now = new Date();
-  const hours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-  if (hours < 1) return { label: 'active', color: 'text-success' };
-  if (hours < 24) return { label: 'recent', color: 'text-info' };
-  if (hours < 72) return { label: 'idle', color: 'text-warning' };
-  return { label: 'inactive', color: 'text-text-muted' };
+function getActivityDot(lastEventAt: string | null) {
+  if (!lastEventAt) return 'bg-gray-300';
+  const hours = (Date.now() - new Date(lastEventAt).getTime()) / (1000 * 60 * 60);
+  if (hours < 24) return 'bg-success';
+  if (hours < 72) return 'bg-warning';
+  return 'bg-gray-300';
 }
 
 function SystemHealthCard({ health }: { health: {
@@ -187,133 +147,6 @@ function SystemHealthCard({ health }: { health: {
   );
 }
 
-function EngagementOpportunitiesCard({ opportunities }: { opportunities: Array<{
-  id: string;
-  preferred_name?: string;
-  name?: string;
-  phone: string;
-  days_inactive: number;
-  reason: string;
-  emotional_state?: string;
-}> }) {
-  if (opportunities.length === 0) {
-    return (
-      <div className="card">
-        <h3 className="font-display font-bold text-lg text-ebano mb-4">Engagement Opportunities</h3>
-        <p className="text-text-muted text-sm">All patients are well engaged!</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-bold text-lg text-ebano">Engagement Opportunities</h3>
-        <span className="text-xs text-text-muted">{opportunities.length} patients</span>
-      </div>
-
-      <div className="space-y-3">
-        {opportunities.slice(0, 5).map((opp) => (
-          <Link
-            key={opp.id}
-            href={`/patient/${opp.id}`}
-            className="flex items-center justify-between p-3 rounded-lg bg-chamomile/30 hover:bg-chamomile/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-barro-light to-sancocho-subtle flex items-center justify-center">
-                <span className="font-display font-bold text-sm text-barro">
-                  {(opp.preferred_name || opp.name || opp.phone)?.[0]?.toUpperCase() || '?'}
-                </span>
-              </div>
-              <div>
-                <p className="font-medium text-sm text-ebano">{opp.preferred_name || opp.name || 'Unknown'}</p>
-                <p className="text-xs text-text-muted">{opp.reason}</p>
-              </div>
-            </div>
-            {opp.emotional_state && <EmotionalStateIndicator state={opp.emotional_state} />}
-          </Link>
-        ))}
-      </div>
-
-      {opportunities.length > 5 && (
-        <Link href="/engagement" className="block mt-4 text-center text-sm text-barro hover:underline">
-          View all {opportunities.length} opportunities →
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function FollowupsCard({ followups }: { followups: Array<{
-  id: string;
-  user_id: string;
-  type: string;
-  scheduled_for: string;
-  status: string;
-  priority: string;
-  user_name?: string;
-}> }) {
-  if (followups.length === 0) {
-    return (
-      <div className="card">
-        <h3 className="font-display font-bold text-lg text-ebano mb-4">Pending Follow-ups</h3>
-        <p className="text-text-muted text-sm">No pending follow-ups</p>
-      </div>
-    );
-  }
-
-  const now = new Date();
-
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-bold text-lg text-ebano">Pending Follow-ups</h3>
-        <span className="text-xs text-text-muted">{followups.length} pending</span>
-      </div>
-
-      <div className="space-y-2">
-        {followups.slice(0, 5).map((fu) => {
-          const scheduledDate = new Date(fu.scheduled_for);
-          const isOverdue = scheduledDate < now;
-
-          return (
-            <Link
-              key={fu.id}
-              href={`/patient/${fu.user_id}`}
-              className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                isOverdue ? 'bg-error/10 hover:bg-error/20' : 'bg-chamomile/30 hover:bg-chamomile/50'
-              }`}
-            >
-              <div>
-                <p className="font-medium text-sm text-ebano">{fu.user_name || 'Unknown'}</p>
-                <p className="text-xs text-text-muted capitalize">{fu.type.replace('_', ' ')}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-xs font-medium ${isOverdue ? 'text-error' : 'text-text-secondary'}`}>
-                  {isOverdue ? 'Overdue' : formatTimeAgo(fu.scheduled_for)}
-                </p>
-                <p className={`text-xs px-2 py-0.5 rounded ${
-                  fu.priority === 'high' ? 'bg-error/20 text-error' :
-                  fu.priority === 'medium' ? 'bg-warning/20 text-warning' :
-                  'bg-gray-100 text-gray-600'
-                }`}>
-                  {fu.priority}
-                </p>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {followups.length > 5 && (
-        <Link href="/followups" className="block mt-4 text-center text-sm text-barro hover:underline">
-          View all {followups.length} follow-ups →
-        </Link>
-      )}
-    </div>
-  );
-}
-
 function RecentActivityCard({ activity }: { activity: Array<{
   id: string;
   type: string;
@@ -340,15 +173,9 @@ function RecentActivityCard({ activity }: { activity: Array<{
             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
               item.type === 'message' ? 'bg-info/20' : 'bg-sancocho/20'
             }`}>
-              {item.type === 'message' ? (
-                <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4 text-sancocho" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              )}
+              <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-ebano">
@@ -367,77 +194,65 @@ function RecentActivityCard({ activity }: { activity: Array<{
 }
 
 export default async function HomePage() {
-  const [users, stats, opportunities, followups, systemHealth, recentActivity] = await Promise.all([
-    fetchUsers(),
-    fetchDashboardStats(),
-    fetchEngagementOpportunities(),
-    fetchPendingFollowups(),
+  const [clients, systemHealth, recentActivity] = await Promise.all([
+    fetchClients(),
     fetchSystemHealth(),
     fetchRecentActivity(10),
   ]);
 
-  // Sort users: needs_human first, then by emotional priority, then by last activity
-  const sortedUsers = [...users].sort((a, b) => {
-    if (a.needs_human && !b.needs_human) return -1;
-    if (!a.needs_human && b.needs_human) return 1;
+  const activeThisWeek = clients.filter(c => {
+    if (!c.lastEventAt) return false;
+    return (Date.now() - new Date(c.lastEventAt).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
-    const priorityStates = ['anxious', 'frustrated', 'worried'];
-    const aPriority = priorityStates.includes(a.emotional_state || '');
-    const bPriority = priorityStates.includes(b.emotional_state || '');
-    if (aPriority && !bPriority) return -1;
-    if (!aPriority && bPriority) return 1;
-
-    const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-    const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-    return bTime - aTime;
-  });
+  const phase2Count = clients.filter(c => c.coachingPhase === 'phase_2').length;
+  const pendingGraduation = clients.filter(c => c.graduationPending).length;
 
   return (
     <div className="space-y-6 md:space-y-8 animate-fade-in">
       {/* Stats Grid */}
       <section>
-        <h2 className="font-display font-bold text-xl md:text-2xl text-ebano mb-4 md:mb-6">Dashboard</h2>
+        <h2 className="font-display font-bold text-xl md:text-2xl text-ebano mb-4 md:mb-6">Plato Inteligente</h2>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 stagger-children">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 stagger-children">
           <StatCard
-            title="Patients"
-            value={stats.totalUsers}
+            title="Clients"
+            value={clients.length}
             subtitle="Total"
             color="bg-barro/10"
             icon={<svg className="w-5 h-5 md:w-6 md:h-6 text-barro" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
           />
           <StatCard
             title="Active"
-            value={stats.activeUsers}
-            subtitle="Engaged"
+            value={activeThisWeek}
+            subtitle="This week"
             color="bg-success/10"
             icon={<svg className="w-5 h-5 md:w-6 md:h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
           />
           <StatCard
-            title="Follow-ups"
-            value={followups.length}
-            subtitle="Pending"
-            color="bg-warning/10"
-            href="/followups"
-            icon={<svg className="w-5 h-5 md:w-6 md:h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+            title="Phase 2"
+            value={phase2Count}
+            subtitle="Graduated"
+            color="bg-info/10"
+            icon={<svg className="w-5 h-5 md:w-6 md:h-6 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
           />
           <StatCard
-            title="Attention"
-            value={stats.needsHuman}
-            subtitle="Handoffs"
-            color={stats.needsHuman > 0 ? 'bg-error/10' : 'bg-gray-100'}
-            icon={<svg className={`w-5 h-5 md:w-6 md:h-6 ${stats.needsHuman > 0 ? 'text-error' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+            title="Graduation"
+            value={pendingGraduation}
+            subtitle="Pending approval"
+            color={pendingGraduation > 0 ? 'bg-warning/10' : 'bg-gray-100'}
+            icon={<svg className={`w-5 h-5 md:w-6 md:h-6 ${pendingGraduation > 0 ? 'text-warning' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>}
           />
         </div>
       </section>
 
-      {/* Patient List + Activity Feed */}
+      {/* Client List + Recent Activity */}
       <section className="grid lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Patient List - Takes 2 columns */}
+        {/* Client List - Takes 2 columns */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h2 className="font-display font-bold text-xl md:text-2xl text-ebano">Patients</h2>
-            <span className="text-text-muted text-sm">{users.length} total</span>
+            <h2 className="font-display font-bold text-xl md:text-2xl text-ebano">Clients</h2>
+            <span className="text-text-muted text-sm">{clients.length} total</span>
           </div>
 
           {/* Desktop Table */}
@@ -445,169 +260,135 @@ export default async function HomePage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-ebano/10">
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Patient</th>
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Status</th>
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Mood</th>
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Credits</th>
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Messages</th>
-                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Last Active</th>
+                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Client</th>
+                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Archetype</th>
+                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Phase</th>
+                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Patterns</th>
+                  <th className="text-left py-4 px-4 font-body font-semibold text-text-secondary text-sm">Last Log</th>
                   <th className="text-right py-4 px-4 font-body font-semibold text-text-secondary text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ebano/5">
-                {sortedUsers.length === 0 ? (
+                {clients.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-text-muted">
-                      <p>No patients yet</p>
+                    <td colSpan={6} className="py-12 text-center text-text-muted">
+                      <p>No clients yet</p>
                     </td>
                   </tr>
                 ) : (
-                  sortedUsers.slice(0, 10).map((user) => {
-                    const activity = getActivityStatus(user.last_message_at || null);
-                    return (
-                      <tr
-                        key={user.id}
-                        className={`hover:bg-chamomile/50 transition-colors ${
-                          user.needs_human ? 'bg-error/5' : ''
-                        }`}
-                      >
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-barro-light to-sancocho-subtle flex items-center justify-center">
-                                <span className="font-display font-bold text-barro">
-                                  {(user.preferred_name || user.name || user.phone)?.[0]?.toUpperCase() || '?'}
-                                </span>
-                              </div>
-                              <span
-                                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                                  activity.label === 'active' ? 'bg-success' :
-                                  activity.label === 'recent' ? 'bg-info' :
-                                  activity.label === 'idle' ? 'bg-warning' : 'bg-gray-300'
-                                }`}
-                                title={`${activity.label} - ${formatTimeAgo(user.last_message_at || null)}`}
-                              />
+                  clients.map((client) => (
+                    <tr
+                      key={client.id}
+                      className={`hover:bg-chamomile/50 transition-colors ${
+                        client.graduationPending ? 'bg-warning/5' : ''
+                      }`}
+                    >
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-barro-light to-sancocho-subtle flex items-center justify-center">
+                              <span className="font-display font-bold text-barro">
+                                {(client.name || client.phone)?.[0]?.toUpperCase() || '?'}
+                              </span>
                             </div>
-                            <div>
-                              <p className="font-body font-medium text-ebano">
-                                {user.preferred_name || user.name || 'Unknown'}
-                              </p>
-                              <p className="text-xs text-text-muted">{user.phone}</p>
-                            </div>
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${getActivityDot(client.lastEventAt)}`}
+                              title={formatTimeAgo(client.lastEventAt)}
+                            />
                           </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <StatusBadge status={user.status} needsHuman={user.needs_human || false} />
-                        </td>
-                        <td className="py-4 px-4">
-                          <EmotionalStateIndicator state={user.emotional_state} />
-                        </td>
-                        <td className="py-4 px-4">
-                          <CreditsDisplay balance={user.credits_balance ?? 0} />
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="font-body font-semibold text-ebano">{user.message_count ?? 0}</span>
-                        </td>
-                        <td className="py-4 px-4 text-text-secondary text-sm">
-                          {formatTimeAgo(user.last_message_at || null)}
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <DeleteButton userId={user.id} userName={user.preferred_name || user.name || user.phone} />
-                            <Link
-                              href={`/patient/${user.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-barro hover:bg-barro/10 transition-colors"
-                            >
-                              View
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </Link>
+                          <div>
+                            <p className="font-body font-medium text-ebano">
+                              {client.name || 'Unknown'}
+                            </p>
+                            <p className="text-xs text-text-muted">{client.phone}</p>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <ArchetypeBadge archetype={client.archetype} />
+                      </td>
+                      <td className="py-4 px-4">
+                        <PhaseBadge phase={client.coachingPhase} />
+                        {client.graduationPending && (
+                          <span className="ml-1 text-xs text-warning" title="Ready to graduate">★</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="font-body font-semibold text-ebano">{client.patternsConfirmed}</span>
+                        <span className="text-text-muted text-xs ml-1">/ 2</span>
+                      </td>
+                      <td className="py-4 px-4 text-text-secondary text-sm">
+                        {formatTimeAgo(client.lastEventAt)}
+                        {client.eventCount > 0 && (
+                          <span className="block text-xs text-text-muted">{client.eventCount} logs</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <Link
+                          href={`/client/${client.userId}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-barro hover:bg-barro/10 transition-colors"
+                        >
+                          View
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
-            {sortedUsers.length > 10 && (
-              <div className="p-4 border-t border-ebano/10 text-center">
-                <Link href="/patients" className="text-sm text-barro hover:underline">
-                  View all {sortedUsers.length} patients →
-                </Link>
-              </div>
-            )}
           </div>
 
           {/* Mobile Card List */}
           <div className="lg:hidden space-y-3">
-            {sortedUsers.length === 0 ? (
+            {clients.length === 0 ? (
               <div className="card py-12 text-center text-text-muted">
-                <p>No patients yet</p>
+                <p>No clients yet</p>
               </div>
             ) : (
-              sortedUsers.slice(0, 8).map((user) => {
-                const activity = getActivityStatus(user.last_message_at || null);
-                return (
-                  <Link
-                    key={user.id}
-                    href={`/patient/${user.id}`}
-                    className={`patient-card block ${user.needs_human ? 'border-l-4 border-l-error' : ''}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="relative">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-barro-light to-sancocho-subtle flex items-center justify-center flex-shrink-0">
-                          <span className="font-display font-bold text-lg text-barro">
-                            {(user.preferred_name || user.name || user.phone)?.[0]?.toUpperCase() || '?'}
-                          </span>
-                        </div>
-                        <span
-                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                            activity.label === 'active' ? 'bg-success' :
-                            activity.label === 'recent' ? 'bg-info' :
-                            activity.label === 'idle' ? 'bg-warning' : 'bg-gray-300'
-                          }`}
-                        />
+              clients.map((client) => (
+                <Link
+                  key={client.id}
+                  href={`/client/${client.userId}`}
+                  className={`patient-card block ${client.graduationPending ? 'border-l-4 border-l-warning' : ''}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-barro-light to-sancocho-subtle flex items-center justify-center flex-shrink-0">
+                        <span className="font-display font-bold text-lg text-barro">
+                          {(client.name || client.phone)?.[0]?.toUpperCase() || '?'}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-body font-semibold text-ebano truncate">
-                              {user.preferred_name || user.name || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-text-muted">{user.phone}</p>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <EmotionalStateIndicator state={user.emotional_state} />
-                            <StatusBadge status={user.status} needsHuman={user.needs_human || false} />
-                          </div>
-                        </div>
-                        <div className="flex items-center flex-wrap gap-2 mt-3 text-xs">
-                          <div className="flex items-center gap-1">
-                            <svg className="w-4 h-4 text-sancocho" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <CreditsDisplay balance={user.credits_balance ?? 0} />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                            <span className="font-medium text-ebano">{user.message_count ?? 0}</span>
-                          </div>
-                          <span className="text-text-muted ml-auto">
-                            {formatTimeAgo(user.last_message_at || null)}
-                          </span>
-                        </div>
-                      </div>
-                      <svg className="w-5 h-5 text-text-muted flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${getActivityDot(client.lastEventAt)}`}
+                      />
                     </div>
-                  </Link>
-                );
-              })
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-body font-semibold text-ebano truncate">
+                            {client.name || 'Unknown'}
+                          </p>
+                          <p className="text-xs text-text-muted">{client.phone}</p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <ArchetypeBadge archetype={client.archetype} />
+                        </div>
+                      </div>
+                      <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
+                        <PhaseBadge phase={client.coachingPhase} />
+                        <span className="text-text-muted">{client.patternsConfirmed}/2 patterns</span>
+                        <span className="text-text-muted ml-auto">{formatTimeAgo(client.lastEventAt)}</span>
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-text-muted flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              ))
             )}
           </div>
         </div>
@@ -616,12 +397,6 @@ export default async function HomePage() {
         <div>
           <RecentActivityCard activity={recentActivity} />
         </div>
-      </section>
-
-      {/* Two Column Layout: Engagement + Follow-ups */}
-      <section className="grid md:grid-cols-2 gap-4 md:gap-6">
-        <EngagementOpportunitiesCard opportunities={opportunities} />
-        <FollowupsCard followups={followups} />
       </section>
 
       {/* System Health */}

@@ -41,7 +41,7 @@ export default function RootLayout({
               
               <nav className="hidden md:flex items-center gap-6">
                 <Link href="/" className="font-body text-text-secondary hover:text-barro transition-colors">
-                  Patients
+                  Clients
                 </Link>
                 <Link href="/followups" className="font-body text-text-secondary hover:text-barro transition-colors">
                   Follow-ups
