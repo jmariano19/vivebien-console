@@ -1013,6 +1013,8 @@ export async function deleteUser(userId: string): Promise<boolean> {
     await p.query(`DELETE FROM ${s}messages WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}health_concerns WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}memories WHERE user_id = $1`, [userId]);
+    await p.query(`DELETE FROM ${s}health_events WHERE user_id = $1`, [userId]);
+    await p.query(`DELETE FROM ${s}client_profiles WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}conversation_state WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}experiment_assignments WHERE user_id = $1`, [userId]);
     await p.query(`DELETE FROM ${s}credit_transactions WHERE user_id = $1`, [userId]);

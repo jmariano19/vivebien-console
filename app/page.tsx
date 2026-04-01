@@ -5,6 +5,7 @@ import {
   type ClientSummary,
 } from '@/lib/db';
 import Link from 'next/link';
+import DeleteButton from './DeleteButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -324,15 +325,18 @@ export default async function HomePage() {
                         )}
                       </td>
                       <td className="py-4 px-4 text-right">
-                        <Link
-                          href={`/client/${client.userId}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-barro hover:bg-barro/10 transition-colors"
-                        >
-                          View
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
+                        <div className="inline-flex items-center gap-1">
+                          <DeleteButton userId={client.userId} userName={client.name || client.phone} />
+                          <Link
+                            href={`/client/${client.userId}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-barro hover:bg-barro/10 transition-colors"
+                          >
+                            View
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))
