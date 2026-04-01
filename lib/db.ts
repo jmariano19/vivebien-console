@@ -1176,6 +1176,34 @@ export async function fetchClientById(userId: string): Promise<ClientDetail | nu
   };
 }
 
+export interface PendingSummary {
+  id: string;
+  userId: string;
+  htmlContent: string;
+  digestDate: string;
+  createdAt: string;
+}
+
+export async function fetchPendingSummary(userId: string): Promise<PendingSummary | null> {
+  const rows = await safeQuery(`
+    SELECT id, user_id, html_content, digest_date::text, created_at
+    FROM ${s}nightly_summaries
+    WHERE user_id = $1 AND status = 'pending'
+    ORDER BY digest_date DESC
+    LIMIT 1
+  `, [userId]);
+
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    id: r.id,
+    userId: r.user_id,
+    htmlContent: r.html_content,
+    digestDate: r.digest_date,
+    createdAt: r.created_at,
+  };
+}
+
 export async function updateCoachNotes(userId: string, notes: string): Promise<boolean> {
   const p = getPool();
   if (!p) return false;

@@ -1,6 +1,7 @@
-import { fetchClientById } from '@/lib/db';
+import { fetchClientById, fetchPendingSummary } from '@/lib/db';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import SummaryApproval from './SummaryApproval';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -79,7 +80,10 @@ const ONBOARDING_QUESTIONS: Record<number, string> = {
 };
 
 export default async function ClientDetailPage({ params }: { params: { id: string } }) {
-  const client = await fetchClientById(params.id);
+  const [client, pendingSummary] = await Promise.all([
+    fetchClientById(params.id),
+    fetchPendingSummary(params.id),
+  ]);
 
   if (!client) {
     notFound();
@@ -125,6 +129,15 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           </div>
         </div>
       </div>
+
+      {/* Pending Summary — shown when a nightly summary is waiting for approval */}
+      {pendingSummary && (
+        <SummaryApproval
+          summaryId={pendingSummary.id}
+          htmlContent={pendingSummary.htmlContent}
+          digestDate={pendingSummary.digestDate}
+        />
+      )}
 
       {/* Two column layout */}
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
