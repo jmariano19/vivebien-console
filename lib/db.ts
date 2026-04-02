@@ -1207,13 +1207,14 @@ export interface PendingSummary {
   id: string;
   userId: string;
   htmlContent: string;
+  digestData: Record<string, unknown>;
   digestDate: string;
   createdAt: string;
 }
 
 export async function fetchPendingSummary(userId: string): Promise<PendingSummary | null> {
   const rows = await safeQuery(`
-    SELECT id, user_id, html_content, digest_date::text, created_at
+    SELECT id, user_id, html_content, digest_data, digest_date::text, created_at
     FROM ${s}nightly_summaries
     WHERE user_id = $1 AND status = 'pending'
     ORDER BY digest_date DESC
@@ -1226,6 +1227,7 @@ export async function fetchPendingSummary(userId: string): Promise<PendingSummar
     id: r.id,
     userId: r.user_id,
     htmlContent: r.html_content,
+    digestData: typeof r.digest_data === 'string' ? JSON.parse(r.digest_data) : (r.digest_data ?? {}),
     digestDate: r.digest_date,
     createdAt: r.created_at,
   };

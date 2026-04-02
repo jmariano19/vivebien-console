@@ -2,6 +2,7 @@ import { fetchClientById, fetchPendingSummary } from '@/lib/db';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import SummaryApproval from './SummaryApproval';
+import GenerateDraft from './GenerateDraft';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -131,12 +132,14 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       </div>
 
       {/* Pending Summary — shown when a nightly summary is waiting for approval */}
-      {pendingSummary && (
+      {pendingSummary ? (
         <SummaryApproval
           summaryId={pendingSummary.id}
-          htmlContent={pendingSummary.htmlContent}
           digestDate={pendingSummary.digestDate}
+          digestData={pendingSummary.digestData}
         />
+      ) : (
+        <GenerateDraft userId={params.id} />
       )}
 
       {/* Two column layout */}
