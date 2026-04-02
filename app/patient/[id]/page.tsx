@@ -2,6 +2,7 @@ import {
   fetchUserById,
   fetchUserMessages,
   fetchUserNotes,
+  fetchUserSummaries,
 } from '@/lib/db';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -76,10 +77,11 @@ function formatTimeAgo(dateString: string | null): string {
 }
 
 export default async function PatientDetailPage({ params }: PageProps) {
-  const [user, messages, notes] = await Promise.all([
+  const [user, messages, notes, summaries] = await Promise.all([
     fetchUserById(params.id),
     fetchUserMessages(params.id, 100),
     fetchUserNotes(params.id),
+    fetchUserSummaries(params.id),
   ]);
 
   if (!user) {
@@ -236,6 +238,7 @@ export default async function PatientDetailPage({ params }: PageProps) {
         user={user}
         messages={messages}
         notes={notes}
+        summaries={summaries}
       />
     </div>
   );

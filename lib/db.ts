@@ -1001,6 +1001,33 @@ export async function fetchDailyActiveUsers(days = 14): Promise<DailyActiveUserC
   `);
 }
 
+// ============================================================================
+// Nightly Summaries (approval flow)
+// ============================================================================
+
+export interface NightlySummary {
+  id: string;
+  user_id: string;
+  digest_id: string | null;
+  digest_data: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'sent' | 'discarded';
+  digest_date: string;
+  approved_at: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export async function fetchUserSummaries(userId: string, limit = 10): Promise<NightlySummary[]> {
+  return safeQuery<NightlySummary>(
+    `SELECT id, user_id, digest_id, digest_data, status, digest_date, approved_at, sent_at, created_at
+     FROM ${s}nightly_summaries
+     WHERE user_id = $1
+     ORDER BY digest_date DESC
+     LIMIT $2`,
+    [userId, limit],
+  );
+}
+
 // Delete a user and all child records (foreign keys don't cascade)
 export async function deleteUser(userId: string): Promise<boolean> {
   const p = getPool();

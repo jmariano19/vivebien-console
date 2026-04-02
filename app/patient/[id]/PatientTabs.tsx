@@ -5,21 +5,26 @@ import {
   UserWithDetails,
   Message,
   OperatorNote,
+  NightlySummary,
 } from '@/lib/db';
 
 interface PatientTabsProps {
   user: UserWithDetails;
   messages: Message[];
   notes: OperatorNote[];
+  summaries: NightlySummary[];
 }
 
-type TabId = 'profile' | 'messages' | 'wellness' | 'notes';
+type TabId = 'profile' | 'messages' | 'wellness' | 'notes' | 'summaries';
 
-export default function PatientTabs({ user, messages, notes }: PatientTabsProps) {
+export default function PatientTabs({ user, messages, notes, summaries }: PatientTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>('profile');
+
+  const pendingCount = summaries.filter(s => s.status === 'pending').length;
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'profile', label: 'Profile' },
+    { id: 'summaries', label: 'Summaries', count: pendingCount || undefined },
     { id: 'messages', label: 'Messages', count: messages.length },
     { id: 'wellness', label: 'Wellness' },
     { id: 'notes', label: 'Notes', count: notes.length },
@@ -52,6 +57,7 @@ export default function PatientTabs({ user, messages, notes }: PatientTabsProps)
       {/* Tab Content */}
       <div className="animate-fade-in">
         {activeTab === 'profile' && <ProfileTab user={user} />}
+        {activeTab === 'summaries' && <SummariesTab summaries={summaries} userId={user.id} />}
         {activeTab === 'messages' && <MessagesTab messages={messages} />}
         {activeTab === 'wellness' && <WellnessTab user={user} messages={messages} />}
         {activeTab === 'notes' && <NotesTab notes={notes} userId={user.id} />}
@@ -308,6 +314,167 @@ function WellnessTab({ user, messages }: { user: UserWithDetails; messages: Mess
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ============ SUMMARIES TAB ============
+function SummariesTab({ summaries, userId }: { summaries: NightlySummary[]; userId: string }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const statusColors: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-700',
+    approved: 'bg-blue-100 text-blue-700',
+    sent: 'bg-green-100 text-green-700',
+    discarded: 'bg-gray-100 text-gray-500',
+  };
+
+  const handleGenerateDraft = async () => {
+    setLoading('generating');
+    setError(null);
+    try {
+      const res = await fetch('/api/digests/generate-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to generate draft');
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate draft');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleApprove = async (summaryId: string) => {
+    setLoading(summaryId);
+    setError(null);
+    try {
+      const res = await fetch('/api/digests/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, summaryId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send summary');
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send summary');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const hasPendingToday = summaries.some(s => {
+    const isToday = s.digest_date === new Date().toISOString().split('T')[0];
+    return isToday && (s.status === 'pending' || s.status === 'sent');
+  });
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {error && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {!hasPendingToday && (
+        <div className="card flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-ebano">Generate Today&apos;s Draft</p>
+            <p className="text-sm text-text-muted mt-0.5">Runs the AI pipeline on today&apos;s food events. You review before it sends.</p>
+          </div>
+          <button
+            onClick={handleGenerateDraft}
+            disabled={loading === 'generating'}
+            className="btn-primary shrink-0 disabled:opacity-50"
+          >
+            {loading === 'generating' ? 'Generating...' : '✨ Generate Draft'}
+          </button>
+        </div>
+      )}
+
+      {summaries.length === 0 ? (
+        <div className="card text-center py-12">
+          <p className="text-text-muted">No summaries yet.</p>
+          <p className="text-sm text-text-muted mt-1">Generate a draft above to get started.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {summaries.map((summary) => {
+            const data = summary.digest_data as Record<string, unknown>;
+            const meals = (data?.meals as Array<{ time: string; title: string }>) || [];
+            const signalIntro = data?.signal_intro as string | undefined;
+            const experimentHeading = data?.experiment_heading as string | undefined;
+            const isPending = summary.status === 'pending';
+
+            return (
+              <div key={summary.id} className="card space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-ebano">
+                      {new Date(summary.digest_date).toLocaleDateString('es-ES', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                    </p>
+                    {summary.sent_at && (
+                      <p className="text-xs text-text-muted mt-0.5">
+                        Sent {new Date(summary.sent_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColors[summary.status] || 'bg-gray-100'}`}>
+                    {summary.status}
+                  </span>
+                </div>
+
+                {/* Summary preview */}
+                {meals.length > 0 && (
+                  <div className="bg-chamomile/50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-text-secondary mb-2">🍽 PLATO DE HOY</p>
+                    <div className="space-y-1">
+                      {meals.slice(0, 4).map((meal, i) => (
+                        <p key={i} className="text-sm text-ebano">
+                          <span className="text-text-muted">{meal.time}</span> — {meal.title}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {signalIntro && (
+                  <div className="bg-chamomile/50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-text-secondary mb-1">📊 SEÑAL PRINCIPAL</p>
+                    <p className="text-sm text-ebano">{signalIntro}</p>
+                  </div>
+                )}
+
+                {experimentHeading && (
+                  <div className="bg-chamomile/50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-text-secondary mb-1">🧪 EXPERIMENTO</p>
+                    <p className="text-sm text-ebano">{experimentHeading}</p>
+                  </div>
+                )}
+
+                {/* Approve button */}
+                {isPending && (
+                  <button
+                    onClick={() => handleApprove(summary.id)}
+                    disabled={loading === summary.id}
+                    className="btn-primary w-full disabled:opacity-50"
+                  >
+                    {loading === summary.id ? 'Sending...' : '✅ Approve & Send to WhatsApp'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
