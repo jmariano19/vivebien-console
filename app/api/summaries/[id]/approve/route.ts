@@ -13,6 +13,7 @@ export async function POST(
     const res = await fetch(`${coreUrl}/api/nightly/${params.id}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: '{}',
     });
 
     const data = await res.json();
